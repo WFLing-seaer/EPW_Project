@@ -111,6 +111,13 @@ class world(Storage):
             self.baseimg = Image.frombytes("RGB",(1,1),b'0000')
             self.baseimg.putpixel((0,0),color)
 
+        class RenderError(Exception):...
+        class InventoryError(Exception):...
+        class UnknownPlaceError(Exception):...
+        class UnknownObjectError(Exception):...
+        class UnknownTargetError(Exception):...
+        class InvalidPlaceError(Exception):...
+
         def render(self) -> Image:
             from PIL import Image
 
@@ -128,6 +135,7 @@ class world(Storage):
             posyrate=0
             for plate in pixelplates:
                 psize=plate[2]//ceil(pixelpopularity**0.5)
+                if psize < 1:raise self.RenderError('像素点过多，无法在有限空间内渲染')
                 posxrate += 1
                 if posxrate >= psize:posxrate,posyrate=0,posyrate+1
                 if plate != plate0:plate0,posxrate,posyrate=plate,0,0
@@ -135,6 +143,23 @@ class world(Storage):
                     BG.paste(next(herepixel).baseimg.resize((psize,psize),resample=RESAMPLE),(plate[0]+posxrate*psize,plate[1]+posyrate*psize),None)
                 except StopIteration:break
             return BG
+
+        def move(self,to,forced=False) -> None:
+            if not (to in world.places.keys()):raise self.UnknownPlaceError
+            if not (forced or (to in world.places[self.pos].conn)):raise self.InvalidPlaceError
+            self.pos = to
+
+        def interact(self,target,oper) -> Any:
+            tt=[item[0] for item in world.places[self.pos].items if item[0].ID == target]
+            if not tt:raise self.UnknownObjectError
+            return getattr(tt[0].oper,oper)(self)
+        
+        def give(self,target,item,quality,forced=False) -> None:
+            if not forced:
+                if not ((self.ivt.get(item,0) > quality) and (quality > 0)):raise ValueError
+                self.ivt[item] -= quality
+            world.players[target].ivt[item] = world.players[target].ivt.get(item,0)+abs(quality)
+
 
 
     class item(Storage):
