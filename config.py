@@ -5,10 +5,6 @@ the EPW Proj. conf./像素世界项目 配置文件
 '''
 #---------------------------------------
 
-#输出文件
-from typing import IO
-output_file : IO = open('output.bmp','w');
-
 #执行绝对路径（可选，留空=默认）
 execution_path : str = ''
 
