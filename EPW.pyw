@@ -28,7 +28,7 @@ from math import ceil
 import pickle
 from typing import Any
 from PIL import Image
-from config import output_file,execution_path,Dumpfile,TDumpfile
+from config import execution_path,Dumpfile,TDumpfile
 
 '''改变执行位置。'''
 import os
@@ -110,6 +110,7 @@ class world(Storage):
             world.players[ID]=self
             self.baseimg = Image.frombytes("RGB",(1,1),b'0000')
             self.baseimg.putpixel((0,0),color)
+            world.places[pos].herepixel.append(self)
 
         class RenderError(Exception):...
         class InventoryError(Exception):...
@@ -125,8 +126,8 @@ class world(Storage):
             MIPMAP = 0
 
             BG=world.places[self.pos].BGimg
-            [BG.paste(world.items[item[0]].mipmap[MIPMAP].resize(world.items[item[0]].mipmap[MIPMAP].size[0]*item[3],world.items[item[0]].mipmap[MIPMAP].size[1]*item[3],resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]
-            herepixel = [pixel for pixel in world.players.values() if pixel.pos == self.pos]
+            [BG.paste(item[0].mipmap[MIPMAP].resize((item[0].mipmap[MIPMAP].size[0]*item[3],item[0].mipmap[MIPMAP].size[1]*item[3]),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]
+            herepixel = world.places[self.pos].herepixel
             pixelpopularity = ceil(len(herepixel)/len(world.places[self.pos].pixels))
             herepixel = iter(herepixel)
             pixelplates = sorted(world.places[self.pos].pixels*pixelpopularity,key=(lambda x:x[2]*1024**2+x[0]*1024+x[1]))
@@ -147,7 +148,14 @@ class world(Storage):
         def move(self,to,forced=False) -> None:
             if not (to in world.places.keys()):raise self.UnknownPlaceError
             if not (forced or (to in world.places[self.pos].conn)):raise self.InvalidPlaceError
+            try:
+                world.places[self.pos].herepixel.remove(self)
+            except ValueError:
+                for aplace in world.places:
+                    try:aplace.herepixel.remove(self) 
+                    finally:...
             self.pos = to
+            world.places[self.pos].herepixel.append(self)
 
         def interact(self,target,oper) -> Any:
             tt=[item[0] for item in world.places[self.pos].items if item[0].ID == target]
@@ -172,7 +180,8 @@ class world(Storage):
             world.items[ID]=self
 
     class place(Storage):
-        def __init__(self,ID:int,desc:str='未命名地点|暂无简介',BGimg:Image=None,conn:list[int]=[],pixels:list[tuple[int,int,int]]=[(0,0,32)],items:list[tuple[type,int,int,int]]=[]) -> None:
+        import mipmap
+        def __init__(self,ID:int,desc:str='未命名地点|暂无简介',BGimg:Image=mipmap.mipmaps['unknown'],conn:list[int]=[],pixels:list[tuple[int,int,int]]=[(0,0,32)],items:list[tuple[type,int,int,int]]=[]) -> None:
             self.ID = ID                                                #ID                     （整型）
             self.desc = desc                                            #名称|描述              （字符串）
             self.BGimg = BGimg                                          #背景图                 （Image实例）
@@ -180,3 +189,4 @@ class world(Storage):
             self.pixels = pixels                                        #可渲染像素点的空地     （x、y、最大尺寸三元组的列表）
             self.items = items                                          #场景内的物品           （物品ID、x、y、缩放四元组的列表）
             world.places[ID]=self
+            self.herepixel=[]
