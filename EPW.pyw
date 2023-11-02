@@ -24,10 +24,13 @@ os
 '''
 #---------------------------------------
 #导入所需库
-from math import ceil
+from copy import deepcopy
+from math import ceil, floor
 import pickle
+from random import choice, randint, shuffle
 from typing import Any
 from PIL import Image
+from matplotlib.backend_bases import RendererBase
 from config import execution_path,Dumpfile,TDumpfile
 
 '''改变执行位置。'''
@@ -125,24 +128,29 @@ class world(Storage):
             RESAMPLE = Image.NEAREST
             MIPMAP = 0
 
-            BG=world.places[self.pos].BGimg
+            BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))
+            BG.paste(world.places[self.pos].BGimg,(0,0))
             [BG.paste(item[0].mipmap[MIPMAP].resize((item[0].mipmap[MIPMAP].size[0]*item[3],item[0].mipmap[MIPMAP].size[1]*item[3]),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]
             herepixel = world.places[self.pos].herepixel
-            pixelpopularity = ceil(len(herepixel)/len(world.places[self.pos].pixels))
-            herepixel = iter(herepixel)
-            pixelplates = sorted(world.places[self.pos].pixels*pixelpopularity,key=(lambda x:x[2]*1024**2+x[0]*1024+x[1]))
-            plate0=(-1,-1,-1)
-            posxrate=0
-            posyrate=0
-            for plate in pixelplates:
-                psize=plate[2]//ceil(pixelpopularity**0.5)
-                if psize < 1:raise self.RenderError('像素点过多，无法在有限空间内渲染')
-                posxrate += 1
-                if posxrate >= psize:posxrate,posyrate=0,posyrate+1
-                if plate != plate0:plate0,posxrate,posyrate=plate,0,0
+            pixelpopularity = min((sum([plc[2][0]*plc[2][1] for plc in world.places[self.pos].pixels])//len(herepixel)),min([min(plc[2][0],plc[2][1]) for plc in world.places[self.pos].pixels])**2/4)
+            iherepixel = iter(herepixel)
+            pixelplates = deepcopy(world.places[self.pos].pixels)
+            prt={}
+            while True:
+                plate = choice(pixelplates)
+                prt[plate]=prt.get(plate,(0,0))
+                psize=floor(pixelpopularity**0.5)
                 try:
-                    BG.paste(next(herepixel).baseimg.resize((psize,psize),resample=RESAMPLE),(plate[0]+posxrate*psize,plate[1]+posyrate*psize),None)
+                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+randint(0,2),plate[1]+prt[plate][1]*psize+randint(0,2)),None)
                 except StopIteration:break
+                pgrid=plate[2][0]//psize
+                phgrid=plate[2][1]//psize
+                prt[plate] = (prt[plate][0]+1,prt[plate][1])
+                if prt[plate][0] >= pgrid:prt[plate]=(0,prt[plate][1]+1)
+                try:
+                    if prt[plate][1] >= phgrid:pixelplates.remove(plate)
+                except ValueError:raise self.RenderError('无法渲染全部像素点：可渲染面积不足')
+                
             return BG
 
         def move(self,to,forced=False) -> None:
@@ -181,7 +189,7 @@ class world(Storage):
 
     class place(Storage):
         import mipmap
-        def __init__(self,ID:int,desc:str='未命名地点|暂无简介',BGimg:Image=mipmap.mipmaps['unknown'],conn:list[int]=[],pixels:list[tuple[int,int,int]]=[(0,0,32)],items:list[tuple[type,int,int,int]]=[]) -> None:
+        def __init__(self,ID:int,desc:str='未命名地点|暂无简介',BGimg:Image=mipmap.mipmaps['unknown'],conn:list[int]=[],pixels:list[tuple[int,int,tuple[int,int]]]=[(0,0,(128,128))],items:list[tuple[type,int,int,int]]=[]) -> None:
             self.ID = ID                                                #ID                     （整型）
             self.desc = desc                                            #名称|描述              （字符串）
             self.BGimg = BGimg                                          #背景图                 （Image实例）
