@@ -24,18 +24,17 @@ os
 '''
 #---------------------------------------
 #导入所需库
-from copy import deepcopy
-from math import ceil, floor
-import pickle
-from random import choice, randint, shuffle
-from typing import Any
-from PIL import Image
-from matplotlib.backend_bases import RendererBase
-from config import execution_path,Dumpfile,TDumpfile
+from copy import deepcopy#遇事不决deepcopy（）
+from math import floor#我哪知道为啥不用int()？（悲）
+import pickle#这玩意太难篡改了……
+from random import choice, randint#遇事不决量子力学
+from typing import Any#强迫症发作想写类型声明的后果
+from PIL import Image#好用得嘞
+from config import execution_path,Dumpfile,TDumpfile#各种路径（但是只有三个变量为啥我还要单开一个文件声明了啊……）
 
 '''改变执行位置。'''
-import os
-execution_path and os.chdir(execution_path);
+import os#哦！斯！
+execution_path and os.chdir(execution_path)#传统艺能cd（）
 
 '''初始化类。'''
 class Storage:
@@ -90,16 +89,16 @@ class backup:
         with open(Dumpfile,'rb') as dumpfile:scope.update(pickle.load(dumpfile))
 
 class world(Storage):
-    users={}
-    players={}
-    items={}
-    places={}
+    users={}#用户，ID对类映射
+    players={}#玩家，同上
+    items={}#物品，同
+    places={}#地点，同
 
     class user(Storage):
         def __init__(self,UID:int,players:list[int]=[]) -> None:
             self.UID = UID                                              #UID                    （整型）
             self.players = players                                      #此账户的像素点列表     （player类列表）
-            world.users[UID]=self
+            world.users[UID]=self#注册
 
     class player(Storage):
         def __init__(self,ID:int,name:str,color:tuple[int,int,int],pos:int=0,stag:list[str]=[],tag:list[str]=[],ivt:dict={}) -> None:
@@ -110,10 +109,10 @@ class world(Storage):
             self.stag = stag                                            #特殊标签               （字符串列表）
             self.tag = tag                                              #标签                   （字符串列表）
             self.ivt = ivt                                              #背包                   （物品名称-数量映射）
-            world.players[ID]=self
-            self.baseimg = Image.frombytes("RGB",(1,1),b'0000')
-            self.baseimg.putpixel((0,0),color)
-            world.places[pos].herepixel.append(self)
+            world.players[ID]=self#注册
+            self.baseimg = Image.frombytes("RGB",(1,1),b'0000')#创建一个1x1的空图片作为基础
+            self.baseimg.putpixel((0,0),color)#根据刚才的基础图片生成这个像素点
+            world.places[pos].herepixel.append(self)#注册到地点
 
         class RenderError(Exception):...
         class InventoryError(Exception):...
@@ -122,20 +121,20 @@ class world(Storage):
         class UnknownTargetError(Exception):...
         class InvalidPlaceError(Exception):...
 
-        def render(self) -> Image:
-            from PIL import Image
+        def render(self,shiver=None) -> Image:
+            RESAMPLE = Image.NEAREST#统一重采样方法
+            MIPMAP = 0#还没有做画质选项的打算，所以MIPMAP就固定为0了。不过以后可以直接从这扩展。
 
-            RESAMPLE = Image.NEAREST
-            MIPMAP = 0
-
-            BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))
-            BG.paste(world.places[self.pos].BGimg,(0,0))
+            BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))#创建一个背景图的空副本（因为deepcopy不能复制图像迫不得已才出此下策）
+            BG.paste(world.places[self.pos].BGimg,(0,0))#给副本粘上背景图
             [BG.paste(item[0].mipmap[MIPMAP].resize((item[0].mipmap[MIPMAP].size[0]*item[3],item[0].mipmap[MIPMAP].size[1]*item[3]),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]
             herepixel = world.places[self.pos].herepixel
             pixelpopularity = min((sum([plc[2][0]*plc[2][1] for plc in world.places[self.pos].pixels])//len(herepixel)),min([min(plc[2][0],plc[2][1]) for plc in world.places[self.pos].pixels])**2/4)
             iherepixel = iter(herepixel)
             pixelplates = deepcopy(world.places[self.pos].pixels)
             prt={}
+            if shiver and len(shiver)/len(herepixel)!=2:raise self.RenderError('无法渲染像素点：无效的抖动帧')
+            shiver = iter(shiver or [0,0]*len(herepixel));
             while True:
                 plate = choice(pixelplates)
                 prt[plate]=prt.get(plate,(0,0))
