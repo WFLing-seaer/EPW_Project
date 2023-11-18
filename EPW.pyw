@@ -16,18 +16,19 @@ API列表：
 config.py
 mipmap.py
 pickle
-typing*
+copy
+math
+typing
 PIL
 os
-
-*非必须
+random
 '''
 #---------------------------------------
 #导入所需库
 from copy import deepcopy#遇事不决deepcopy（）
 from math import floor ,ceil#我哪知道为啥不用int()？（悲）
 import pickle#这玩意太难篡改了……
-from random import choice, randint ,shuffle ,seed#遇事不决量子力学
+from random import choice, randint ,seed#遇事不决量子力学
 from typing import Any#强迫症发作想写类型声明的后果
 from PIL import Image#好用得嘞
 from config import execution_path,Dumpfile,TDumpfile#各种路径（但是只有三个变量为啥我还要单开一个文件声明了啊……）
@@ -85,8 +86,8 @@ class backup:
             try:dumpfile.write(Storage().flatten(scope))
             except:...
     
-    def load(scope=globals()) -> None:
-        with open(Dumpfile,'rb') as dumpfile:scope.update(pickle.load(dumpfile))
+    def load() -> None:
+        with open(Dumpfile,'rb') as dumpfile:globals().update(pickle.load(dumpfile))
 
 class world(Storage):
     users={}#用户，ID对类映射
@@ -127,7 +128,7 @@ class world(Storage):
 
             BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))#创建一个背景图的空副本（因为deepcopy不能复制图像迫不得已才出此下策）
             BG.paste(world.places[self.pos].BGimg,(0,0))#给副本粘上背景图
-            [BG.paste(item[0].mipmap[MIPMAP].resize((item[0].mipmap[MIPMAP].size[0]*item[3],item[0].mipmap[MIPMAP].size[1]*item[3]),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]#粘物品
+            [BG.paste(item[0].mipmap[MIPMAP].resize((int(item[0].mipmap[MIPMAP].size[0]*item[3]),int(item[0].mipmap[MIPMAP].size[1]*item[3])),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]#粘物品
             herepixel = world.places[self.pos].herepixel#在此的像素点
             pixelpopularity = min((sum([plc[2][0]*plc[2][1] for plc in world.places[self.pos].pixels])//len(herepixel)),min([min(plc[2][0],plc[2][1]) for plc in world.places[self.pos].pixels])**2/4)#计算像素点密度（懒得搞二维均衡了，偷懒按照正方形计算了）（悲）
             iherepixel = iter(herepixel)#开个迭代器
@@ -136,7 +137,7 @@ class world(Storage):
             if shiver and len(shiver)/len(herepixel)!=2:raise self.RenderError('无法渲染像素点：无效的抖动帧')#shiver长度不对就抛错
             shiver = iter(shiver or [0,0]*len(herepixel))#没有shiver就弄个空shiver上去（shiver的格式是，每两个值表示一个像素点的抖动，因为在渲染的时候herepixel不会变，所以不用担心对不齐的问题）
             while True:
-                seed(prt)
+                seed(tuple(prt))
                 plate = choice(pixelplates)#瞎选一个，这里用seed的原因是要保证渲染各帧的时候像素点不会乱串（因为每次渲染的时候所有变量都一样所以不会串）
                 prt[plate]=prt.get(plate,(0,0))#获取偏移量，或者设置默认值0,0
                 psize=floor(pixelpopularity**0.5)#计算像素点的大小
@@ -177,8 +178,6 @@ class world(Storage):
                 self.ivt[item] -= quality
             world.players[target].ivt[item] = world.players[target].ivt.get(item,0)+abs(quality)
 
-
-
     class item(Storage):
         def __init__(self,ID:int,desc:str='未命名物品|暂无简介',oper:type=None,mipmapID:str='unknown') -> None:
             from mipmap import mipmaps
@@ -199,5 +198,3 @@ class world(Storage):
             self.items = items                                          #场景内的物品           （物品ID、x、y、缩放四元组的列表）
             world.places[ID]=self
             self.herepixel=[]
-
-
