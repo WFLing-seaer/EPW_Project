@@ -143,7 +143,7 @@ class world(Storage):
                 psize=floor(pixelpopularity**0.5)#计算像素点的大小
                 if psize < 2:raise self.RenderError('无法渲染像素点：密度过大')#检验
                 try:
-                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+randint(0,2),plate[1]+prt[plate][1]*psize+randint(0,2)),None)#粘像素点，-2是为了抖动
+                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+next(shiver),plate[1]+prt[plate][1]*psize+next(shiver)),None)#粘像素点，-2是为了抖动
                 except StopIteration:break#粘完了就出循环
                 pgrid=plate[2][0]//psize
                 phgrid=plate[2][1]//psize#这两行是计算一片区域内排像素点的行列数
