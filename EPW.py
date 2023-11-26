@@ -79,15 +79,6 @@ class Storage:
         '''用于以字符串形式存储类的实例。'''
         return self.flatten(self)
         
-class backup:
-    def dump(scope=globals()) -> None:
-        with open(Dumpfile,'wb') as dumpfile:pickle.dump(scope,dumpfile)
-        with open(TDumpfile,'w') as dumpfile:
-            try:dumpfile.write(Storage().flatten(scope))
-            except:...
-    
-    def load() -> None:
-        with open(Dumpfile,'rb') as dumpfile:globals().update(pickle.load(dumpfile))
 
 class world(Storage):
     users={}#用户，ID对类映射
@@ -125,7 +116,32 @@ class world(Storage):
         def render(self,shiver=None) -> Image:
             RESAMPLE = Image.NEAREST#统一重采样方法
             MIPMAP = 0#还没有做画质选项的打算，所以MIPMAP就固定为0了。不过以后可以直接从这扩展。
-
+            hpsize=-1
+            while True:
+                try:
+                    herepixel = world.places[self.pos].herepixel#在此的像素点
+                    pixelpopularity = min((sum([plc[2][0]*plc[2][1] for plc in world.places[self.pos].pixels])//len(herepixel)),min([min(plc[2][0],plc[2][1]) for plc in world.places[self.pos].pixels])**2/4)#计算像素点密度（懒得搞二维均衡了，偷懒按照正方形计算了）（悲）
+                    pixelplates = deepcopy(world.places[self.pos].pixels)#能塞(sei)像素点的地方
+                    prt={}#像素点偏移量
+                    if shiver and len(shiver)/len(herepixel)!=2:raise self.RenderError('无法渲染像素点：无效的抖动帧')#shiver长度不对就抛错
+                    for ignore in range(len(herepixel)):
+                        seed(tuple(prt))
+                        plate = choice(pixelplates)#瞎选一个，这里用seed的原因是要保证渲染各帧的时候像素点不会乱串（因为每次渲染的时候所有变量都一样所以不会串）
+                        prt[plate]=prt.get(plate,(0,0))#获取偏移量，或者设置默认值0,0
+                        if hpsize == -1:hpsize = floor(pixelpopularity**0.5)
+                        psize=hpsize#计算像素点的大小
+                        if psize < 2:raise self.RenderError('无法渲染像素点：密度过大')#检验
+                        pgrid=plate[2][0]//psize
+                        phgrid=plate[2][1]//psize#这两行是计算一片区域内排像素点的行列数
+                        prt[plate] = (prt[plate][0]+1,prt[plate][1])#下一个格点
+                        if prt[plate][0] >= pgrid:prt[plate]=(0,prt[plate][1]+1)#同上
+                        try:
+                            if prt[plate][1] >= phgrid:pixelplates.remove(plate)#塞满一个之后就不要塞了
+                        except ValueError:raise self.RenderError('无法渲染全部像素点：可渲染面积不足')#所有plate都塞满了像素点还没排完
+                    break
+                except IndexError:
+                    print('dec size:',hpsize)
+                    hpsize-=1
             BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))#创建一个背景图的空副本（因为deepcopy不能复制图像迫不得已才出此下策）
             BG.paste(world.places[self.pos].BGimg,(0,0))#给副本粘上背景图
             [BG.paste(item[0].mipmap[MIPMAP].resize((int(item[0].mipmap[MIPMAP].size[0]*item[3]),int(item[0].mipmap[MIPMAP].size[1]*item[3])),resample=RESAMPLE),item[1:3],None) for item in world.places[self.pos].items]#粘物品
@@ -135,15 +151,15 @@ class world(Storage):
             pixelplates = deepcopy(world.places[self.pos].pixels)#能塞(sei)像素点的地方
             prt={}#像素点偏移量
             if shiver and len(shiver)/len(herepixel)!=2:raise self.RenderError('无法渲染像素点：无效的抖动帧')#shiver长度不对就抛错
-            shiver = iter(shiver or [0,0]*len(herepixel))#没有shiver就弄个空shiver上去（shiver的格式是，每两个值表示一个像素点的抖动，因为在渲染的时候herepixel不会变，所以不用担心对不齐的问题）
+            _shiver = iter(shiver or [randint(0,5) for ignore in range(2*len(herepixel))])#没有shiver就弄个空shiver上去（shiver的格式是，每两个值表示一个像素点的抖动，因为在渲染的时候herepixel不会变，所以不用担心对不齐的问题）
             while True:
                 seed(tuple(prt))
                 plate = choice(pixelplates)#瞎选一个，这里用seed的原因是要保证渲染各帧的时候像素点不会乱串（因为每次渲染的时候所有变量都一样所以不会串）
                 prt[plate]=prt.get(plate,(0,0))#获取偏移量，或者设置默认值0,0
-                psize=floor(pixelpopularity**0.5)#计算像素点的大小
+                psize=hpsize#计算像素点的大小
                 if psize < 2:raise self.RenderError('无法渲染像素点：密度过大')#检验
                 try:
-                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+next(shiver),plate[1]+prt[plate][1]*psize+next(shiver)),None)#粘像素点，-2是为了抖动
+                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+next(_shiver),plate[1]+prt[plate][1]*psize+next(_shiver)),None)#粘像素点，-2是为了抖动
                 except StopIteration:break#粘完了就出循环
                 pgrid=plate[2][0]//psize
                 phgrid=plate[2][1]//psize#这两行是计算一片区域内排像素点的行列数
@@ -152,9 +168,10 @@ class world(Storage):
                 try:
                     if prt[plate][1] >= phgrid:pixelplates.remove(plate)#塞满一个之后就不要塞了
                 except ValueError:raise self.RenderError('无法渲染全部像素点：可渲染面积不足')#所有plate都塞满了像素点还没排完
-                
             return BG
 
+        def GIFrender(self):
+            ...
         def move(self,to,forced=False) -> None:
             if not (to in world.places.keys()):raise self.UnknownPlaceError
             if not (forced or (to in world.places[self.pos].conn)):raise self.InvalidPlaceError
@@ -198,3 +215,13 @@ class world(Storage):
             self.items = items                                          #场景内的物品           （物品ID、x、y、缩放四元组的列表）
             world.places[ID]=self
             self.herepixel=[]
+
+class backup:
+    def dump() -> None:
+        with open(Dumpfile,'wb+') as dumpfile:pickle.dump((world.players,world.places,world.users,world.items),dumpfile)
+        '''with open(TDumpfile,'w') as dumpfile:
+            try:dumpfile.write(Storage().flatten(scope))
+            except:...'''
+    
+    def load() -> None:
+        with open(Dumpfile,'rb+') as dumpfile:world.players,world.places,world.users,world.items=pickle.load(dumpfile)
