@@ -8,14 +8,17 @@ current_pixel=pickle.load(open('~$pxtmp','rb+'));
 EPW.backup.load()
 class FUNC:
     def me(msg,*info):
-        try:
-            img=current_pixel[int(msg.author.id)].render();
-        except IndexError as e:
-            return 'E14:未注册的用户或无效像素点'+repr(e)
-        except Exception as e:
-            return 'E17:渲染错误:'+str(e)
-        img.save('~$tmp','png')
-        return ('infos:'+str(info),'~$tmp')
+        if '-s' in info:
+            try:
+                img=current_pixel[int(msg.author.id)].render();
+            except IndexError as e:
+                return 'E14:未注册的用户或无效像素点'+repr(e)
+            except Exception as e:
+                return 'E17:渲染错误:'+str(e)
+            img.save('~$tmp.png','png')
+        else:
+            current_pixel[int(msg.author.id)].GIFrender()
+        return ('infos:'+str(info),'~$tmp'+('.png' if '-s' in info else'.gif'))
     def 注册(msg,*info):
         if not info:
             return '''欢迎注册像素世界。在注册之前，请您确认您已经阅读了公告。

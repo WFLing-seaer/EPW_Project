@@ -26,9 +26,9 @@ random
 #---------------------------------------
 #导入所需库
 from copy import deepcopy#遇事不决deepcopy（）
-from math import floor ,ceil#我哪知道为啥不用int()？（悲）
+from math import floor ,ceil, lcm#我哪知道为啥不用int()？（悲）
 import pickle#这玩意太难篡改了……
-from random import choice, randint ,seed#遇事不决量子力学
+from random import choice, randint, random ,seed#遇事不决量子力学
 from typing import Any#强迫症发作想写类型声明的后果
 from PIL import Image#好用得嘞
 from config import execution_path,Dumpfile,TDumpfile#各种路径（但是只有三个变量为啥我还要单开一个文件声明了啊……）
@@ -140,7 +140,7 @@ class world(Storage):
                         except ValueError:raise self.RenderError('无法渲染全部像素点：可渲染面积不足')#所有plate都塞满了像素点还没排完
                     break
                 except IndexError:
-                    print('dec size:',hpsize)
+                    #print('dec size:',hpsize)
                     hpsize-=1
             BG=Image.new('RGB',world.places[self.pos].BGimg.size,(0,0,0))#创建一个背景图的空副本（因为deepcopy不能复制图像迫不得已才出此下策）
             BG.paste(world.places[self.pos].BGimg,(0,0))#给副本粘上背景图
@@ -150,7 +150,8 @@ class world(Storage):
             iherepixel = iter(herepixel)#开个迭代器
             pixelplates = deepcopy(world.places[self.pos].pixels)#能塞(sei)像素点的地方
             prt={}#像素点偏移量
-            if shiver and len(shiver)/len(herepixel)!=2:raise self.RenderError('无法渲染像素点：无效的抖动帧')#shiver长度不对就抛错
+            if shiver and len(shiver)/len(herepixel)<2:raise self.RenderError('无法渲染像素点：无效的抖动帧')#shiver长度不对就抛错
+            elif shiver:shiver = shiver[:len(herepixel)*2]
             _shiver = iter(shiver or [randint(0,5) for ignore in range(2*len(herepixel))])#没有shiver就弄个空shiver上去（shiver的格式是，每两个值表示一个像素点的抖动，因为在渲染的时候herepixel不会变，所以不用担心对不齐的问题）
             while True:
                 seed(tuple(prt))
@@ -159,7 +160,7 @@ class world(Storage):
                 psize=hpsize#计算像素点的大小
                 if psize < 2:raise self.RenderError('无法渲染像素点：密度过大')#检验
                 try:
-                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(plate[0]+prt[plate][0]*psize+next(_shiver),plate[1]+prt[plate][1]*psize+next(_shiver)),None)#粘像素点，-2是为了抖动
+                    BG.paste(next(iherepixel).baseimg.resize((psize-2,psize-2),resample=RESAMPLE),(int(plate[0]+prt[plate][0]*psize+(psize*next(_shiver)/100)),int(plate[1]+prt[plate][1]*psize-(psize*next(_shiver)/100))),None)#粘像素点，-2是为了抖动
                 except StopIteration:break#粘完了就出循环
                 pgrid=plate[2][0]//psize
                 phgrid=plate[2][1]//psize#这两行是计算一片区域内排像素点的行列数
@@ -171,7 +172,28 @@ class world(Storage):
             return BG
 
         def GIFrender(self):
-            ...
+            import anim
+            def seedfrom(k):
+                seed(k)
+                while True:
+                    o=random()
+                    seed(o)
+                    yield(o)
+            anims = anim.anim
+            anim_length=lcm(*[len(a) for a in anims])
+            anims = [iter(a*ceil(2*anim_length*len(world.places[self.pos].herepixel)/len(a))) for a in anims]
+            output=[]
+            for i in range(anim_length):
+                sf=seedfrom(tuple(world.places.items()))
+                shiver=[]
+                for ig in range(len(world.places[self.pos].herepixel)):
+                    seed(next(sf))
+                    t = choice(anims)
+                    shiver +=[next(t)+next(sf)*20-10,next(t)+next(sf)*20-10]
+                output.append(self.render(shiver))
+                print('成功渲染一帧:',i)
+            output[0].save('~$tmp.gif',save_all=True,append_images=output[1:], duration=int(1000/8), loop=0, disposal=2)
+            return Image.open('~$tmp.gif')
         def move(self,to,forced=False) -> None:
             if not (to in world.places.keys()):raise self.UnknownPlaceError
             if not (forced or (to in world.places[self.pos].conn)):raise self.InvalidPlaceError
