@@ -52,6 +52,7 @@ class frame:
         self.texture = texture
         self.ID=len(VARS.get(Vfrm,[]))
         VARS[Vfrm] = VARS.get(Vfrm,[])+[self]
+        self.hereItems=[]
     def render(self,rxl,ryl,rate):
         #rxl、ryl是渲染时的偏移量，也即左上角坐标。rate是缩放比例。
         self.tkframe.place(x=0,y=0)
@@ -226,6 +227,7 @@ class item:
         for aframe in VARS[Vfrm]:
             if aframe.x0 <= self.x <= aframe.x1 and aframe.y0 <= self.y <= aframe.y1:
                 self.currentframe = aframe
+                aframe.hereItems.append(self)
                 break#我就不信到时候程序跑起来会有两帧是重叠的，恼。（但还是习惯性break一下）
     def tp(self,x,y):
         self.x,self.y=x,y
@@ -284,5 +286,3 @@ class item:
             self.x += dx
             self.y += dy
             return 5
-    def render(self):
-        ...
