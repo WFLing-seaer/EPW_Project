@@ -1,6 +1,7 @@
 import pickle as _pickle
 from . import config as _config
 from PIL import Image as _img
+from PIL import ImageTk as _itk
 from PIL import PngImagePlugin as _png
 from PIL import BmpImagePlugin as _bmp
 from PIL import GifImagePlugin as _gif
@@ -54,10 +55,14 @@ class frame:
         VARS[Vfrm] = VARS.get(Vfrm,[])+[self]
         self.hereItems=[]
     def render(self,rxl,ryl,rate):
-        #rxl、ryl是渲染时的偏移量，也即左上角坐标。rate是缩放比例。
+        #rxl、ryl是渲染时的偏移量，也即屏幕左上角相对帧的坐标。rate是缩放比例。
         self.tkframe.place(x=0,y=0)
-        #self
-        ...
+        plate = self.texture
+        for it in self.hereItems:
+            plate.paste(it.charlet,(it.x-self.x0,it.y-self.y0))
+        pImg=_itk.PhotoImage(plate.resize((int(plate.width*rate),int(plate.height*rate)),resample=5))
+        self.tkframe.config(image=pImg)#type:ignore
+        self.tkframe.place(x=-rxl,y=-ryl)
 class node:
     '''定义图或树的节点。'''
     istree:bool
@@ -235,9 +240,10 @@ class item:
     def collidingItem(self,testingPx:tuple|None=None,collidedPx:list|None=None,ignoreItems:list|None=None):
         #返回所有和当前item碰撞的item。
         hmx,hmy = self.hitbox.size#相对坐标
-        #collidedPx是已经计算完碰撞了的像素颜色。虽然hitbox理应是黑白图，但是不用的颜色或灰度依然可以用来标识多碰撞箱。多碰撞箱可以应用于——比如，滑槽——的场景下。
+        #collidedPx是已经计算完碰撞了的像素颜色。虽然hitbox理应是黑白图，但是不同的颜色或灰度依然可以用来标识多碰撞箱。多碰撞箱可以应用于——比如，滑槽——的场景下。
         #testingPx是正在检验的像素颜色。
         colItems=[]
+        ignoreItems = ignoreItems or []
         for hx in range(hmx):
             for hy in range(hmy):
                 pxpos=(hx,hy)#相对坐标
@@ -247,7 +253,7 @@ class item:
                 else:
                     if self.hitbox.getpixel(pxpos) < (255,255,255):continue
                 canhit:list=self.onlyhit or VARS[Vitm]
-                if ignoreItems:canhit=list(set(canhit)-set(ignoreItems)-set(self.ignorehit)-{self})
+                canhit=list(set(canhit)-set(ignoreItems)-set(self.ignorehit)-{self})
                 for aitem in canhit:
                     if aitem.ignorehit and self in aitem.ignorehit:continue
                     if aitem.onlyhit and self not in aitem.onlyhit:continue
@@ -286,3 +292,20 @@ class item:
             self.x += dx
             self.y += dy
             return 5
+    def render(self):
+        rfrmpos=(self.x-self.currentframe.x0,self.y-self.currentframe.y0)#相对于帧的坐标,related-to-frame-position
+        cfrmpos=self.currentframe.tkframe.winfo_x(),self.currentframe.tkframe.winfo_y()#帧坐标,current-frame-...（懒的写（摆
+        rwinpos=(cfrmpos[0]+rfrmpos[0],cfrmpos[1]+rfrmpos[1])#相对于窗口的坐标
+        winx,winy = self.currentframe.root.size()
+        frmx,frmy=self.currentframe.tkframe.size()
+        nx,ny=cfrmpos
+        if winx//4 > rwinpos[0] and nx<0:
+            nx,ny=(cfrmpos[0]+rwinpos[0]-winx//4,cfrmpos[1])
+        elif winx*3//4 < rwinpos[0] and nx>winx-frmx:
+            nx,ny=(cfrmpos[0]+rwinpos[0]-winx*3//4,cfrmpos[1])
+        if winy//4 > rwinpos[1] and ny>0:
+            nx,ny=(cfrmpos[0],cfrmpos[1]+rwinpos[1]-winy//4)
+        elif winy*3//4 < rwinpos[1] and ny>winy-frmy:
+            nx,ny=(cfrmpos[0],cfrmpos[1]+rwinpos[1]-winy*3//4)
+        #上面这八行，一坨代码，都是保证玩家位置在中央50%的……hhh
+        self.currentframe.render(-nx,-ny,1)
