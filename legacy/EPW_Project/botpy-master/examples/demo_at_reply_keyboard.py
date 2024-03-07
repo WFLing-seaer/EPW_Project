@@ -10,10 +10,9 @@ from botpy.types.message import MarkdownPayload, KeyboardPayload
 from botpy.ext.cog_yaml import read
 
 
-
 class MyClient(botpy.Client):
     async def on_at_message_create(self, message: Message):
-        print(self.api,message)
+        print(self.api, message)
         #
         # await send_template_keyboard(self.api, message)
         await send_self_defined_keyboard(self.api, message)

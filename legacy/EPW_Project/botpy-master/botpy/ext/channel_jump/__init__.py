@@ -8,11 +8,7 @@
 4、当提供子频道转跳字段时请弃用本模块
 """
 
-__all__ = [
-    "get_channel_jump",
-    "get_channel_jump_strict",
-    "escape_channel_jump"
-]
+__all__ = ["get_channel_jump", "get_channel_jump_strict", "escape_channel_jump"]
 
 import re
 from typing import List, Dict
@@ -32,8 +28,9 @@ def get_channel_jump(text: str = None, message: Message = None) -> List[str]:
     return channel_jump_re.findall(message.content if text is None else text)
 
 
-async def get_channel_jump_strict(api: BotAPI, message: Message = None, text: str = None,
-                                  guild_id: str = None) -> Dict[str, str]:
+async def get_channel_jump_strict(
+    api: BotAPI, message: Message = None, text: str = None, guild_id: str = None
+) -> Dict[str, str]:
     """
     识别文本中的子频道转跳(准确)
     :param api: BotAPI

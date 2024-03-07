@@ -17,7 +17,7 @@ class Message:
         "seq",
         "seq_in_channel",
         "timestamp",
-        "event_id"
+        "event_id",
     )
 
     def __init__(self, api: BotAPI, event_id, data: gateway.MessagePayload):
@@ -39,7 +39,7 @@ class Message:
         self.event_id = event_id
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})
 
     class _User:
         def __init__(self, data):
@@ -100,7 +100,7 @@ class DirectMessage:
         "seq_in_channel",
         "src_guild_id",
         "timestamp",
-        "event_id"
+        "event_id",
     )
 
     def __init__(self, api: BotAPI, event_id, data: gateway.DirectMessagePayload):
@@ -122,7 +122,7 @@ class DirectMessage:
         self.event_id = event_id
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})
 
     class _User:
         def __init__(self, data):
@@ -165,13 +165,7 @@ class DirectMessage:
 
 
 class MessageAudit:
-    __slots__ = (
-        "_api",
-        "audit_id",
-        "message_id",
-        "channel_id",
-        "guild_id",
-        "event_id")
+    __slots__ = ("_api", "audit_id", "message_id", "channel_id", "guild_id", "event_id")
 
     def __init__(self, api: BotAPI, event_id, data: gateway.MessageAuditPayload):
         self._api = api
@@ -183,4 +177,4 @@ class MessageAudit:
         self.event_id = event_id
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})

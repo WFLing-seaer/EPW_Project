@@ -1,311 +1,490 @@
-import pickle as _pickle
-from . import config as _config
-from PIL import Image as _img
-from PIL import ImageTk as _itk
-from PIL import PngImagePlugin as _png
-from PIL import BmpImagePlugin as _bmp
-from PIL import GifImagePlugin as _gif
-from PIL import JpegImagePlugin as _jpg
+# the EPW Proj. 3/像素世界项目 第三版 classes.py|类定义
+# 反馈：QQ 3629751397、邮箱 WFLing_seaer@163.com
+# © 2023-2024 水晴明、凌晚枫 All rights reserved.
 
-import tkinter as tk
-import math
+# 导入
+import math, cmath, os, copy, logging, pickle as _pickle, tkinter as tk, numpy as np
 
-_pngtype = _png.PngImageFile
-_bmptype = _bmp.BmpImageFile
-_giftype = _gif.GifImageFile
-_jpgtype = _jpg.JpegImageFile
+from . import config
+from PIL import Image as _img, ImageTk as _itk
+from typing import Any, Callable, Type
 
-_imgtype = _pngtype | _bmptype | _giftype | _jpgtype
+# 常量
+V_WIN: str = "WINDOWS"
+V_FRM: str = "FRAMES"
+V_ITM: str = "ITEMS"
 
-def allload():
-    with open(_config.DATA,'rb') as db:
-        storeddata:dict=_pickle.load(db)
-        globals().update(storeddata)
+inf: float = float("inf")
+nan: float = float("nan")
 
-VARS = {}
-Vwin='windows'
-Vfrm='frames'
-Vitm='items'
+Imgtype = _img.Image
 
-dummyImg:_imgtype=_img.open('../pict/unknown.png') # type: ignore
 
+def _pass(*_):
+    pass
+
+
+# 全局变量
+_vars: dict[str, Any] = {}
+
+
+# 全局函数
+def dump():
+    with os.fdopen(os.open(config.DATA, 32768, 769), "wb") as db:
+        _pickle.dump(_vars, db)
+
+
+def load():
+    with open(config.DATA, "rb") as db:
+        _vars = _pickle.load(db)
+
+
+def info(*args):
+    logging.info(" ".join([str(c) for c in args]))
+
+
+# 类定义
 class window:
-    '''定义tk主窗口。每个游戏进程应该有两个window，其中一个用以挂载frames，另一个用来实现各种奇奇怪怪的效果。（但按理来说不会同时存在两个游戏进程就是了……）'''
-    def __init__(self):
-        self.win:tk.Tk = tk.Tk()
-        self.ID = len(VARS.get(Vwin,[]))
-        VARS[Vwin] = VARS.get(Vwin,[])+[self]
-class frame:
-    '''每帧图片的基础。
-    定义了最基础的大小、序号，等等。'''
-    def __init__(self,x,y,win:window=VARS[Vwin][0],texture:_imgtype=dummyImg) -> None:
-        '''初始化一个基底图片。
-        参数：
-        -x,y     左下角坐标。（右上角坐标根据texture大小自动计算）
-        -win     窗口。
-        -texture 背景图片。'''
-        self.x0,self.y0 = x,y
-        self.x1,self.y1 = x+texture.width,y+texture.height
-        self.root = win.win
-        self.tkframe = tk.Frame(win.win,width=texture.width,height=texture.height)
-        self.tkframe.place(x=0,y=0)
-        tk.Label(self.tkframe,image=texture).place(x=0,y=0)#type:ignore
-        self.texture = texture
-        self.ID=len(VARS.get(Vfrm,[]))
-        VARS[Vfrm] = VARS.get(Vfrm,[])+[self]
-        self.hereItems=[]
-    def render(self,rxl,ryl,rate):
-        #rxl、ryl是渲染时的偏移量，也即屏幕左上角相对帧的坐标。rate是缩放比例。
-        self.tkframe.place(x=0,y=0)
-        plate = self.texture
-        for it in self.hereItems:
-            plate.paste(it.charlet,(it.x-self.x0,it.y-self.y0))
-        pImg=_itk.PhotoImage(plate.resize((int(plate.width*rate),int(plate.height*rate)),resample=5))
-        self.tkframe.config(image=pImg)#type:ignore
-        self.tkframe.place(x=-rxl,y=-ryl)
-class node:
-    '''定义图或树的节点。'''
-    istree:bool
-    related:dict
-    def __init__(self,
-                 related:dict|list|type|None=None,
-                 parent:type|None=None,
-                 data=None) -> None:
-        '''定义图或树的节点。
-        related  : {node:weight} 或 list[node]（等价于{node1:0,node2:0,...}） 或  node（等价于{node:0}）
-        parent   : node
+    """定义tkinter主窗口。
+    每个游戏进程可能不止一个window。
+    （当然此处表述不严谨，原则上同设备不允许同时开俩游戏进程）"""
 
-        注，下文叙述时，将related视作一个节点时，指的是其中的每一个节点。
+    # 挂载于此窗口的对象列表，其索引为ID。
+    objs: list[Type[Any]] = []
 
-        如果只定义了parent：
-        -此节点为叶子节点，当且仅当parent为树节点。
-        -否则，为图节点。
-        如果只定义了related：
-        -此节点为树节点，当且仅当related皆为根节点。
-        -否则，为图节点。
-        -如有需要，related所在树将被修改为图。
-        同时定义related和parent时：
-        -如parent为树节点、related皆为根节点：
-        *节点也为树节点，其为parent的一个子树的根节点，其子树以related为根节点。
-        -否则：
-        *将parent所在树修改为图（如需要）。
-        *将related所在树修改为图（如需要）。
-        *此节点为连接parent与related的图节点。
-        *parent侧的权值将被设为0。
-        *parent与related将被合并。
-        如果related与parent都未定义：
-        -此节点为树的根节点。
+    def __init__(self, size: tuple[int, int] | None = None):
+        """size - 窗口大小，留空(None)表示全屏"""
+        # 创建窗口。
+        self.win: tk.Tk = tk.Tk()
+        if size is None:
+            self.win.attributes("-fullscreen", True)
+        self.win.attributes("-topmost", True)
+        self.win.config(background="#000000")
+        self.win.attributes("-transparentcolor", "#000000")
+        if size is None:
+            self.win.overrideredirect(True)
+        # ID。
+        self.ID = len(_vars.get(V_WIN, []))
+        # 注册。（对于任何类，注册都是必须的。）
+        _vars[V_WIN] = _vars.get(V_WIN, []) + [self]
+        # 窗口的显示区。不想用Canvas（摆）
+        self.size = size or (
+            self.win.winfo_screenwidth(),
+            self.win.winfo_screenheight(),
+        )
+        self.win.geometry(str(self.size[0]) + "x" + str(self.size[1]))
+        self.win.wm_resizable(False, False)
+        self.pic = _itk.PhotoImage(
+            _img.new(
+                "RGBA",
+                self.size,
+            )
+        )
+        self.pic_root = tk.Label(self.win, bg="black")
+        self.pic_root.pack(fill="both", expand=1)
+        self.win.update()
 
-        当此节点是树节点时：
-        -以此节点为根结点的树是parent（如有）的子树。
-        当此节点是图节点时：
-        -各边的权值由映射决定。如related不是映射，则权值默认为0。  '''
-        dfn = (parent is not None)*2+(related is not None)#dfn=define 0:None None;1:None 东西;2:东西 None;3:东西 东西
+    def __del__(self):
+        # 销毁窗口。
+        for obj in self.objs:
+            try:
+                del obj
+            except AttributeError:
+                pass
+        self.win.destroy()
 
-        if isinstance(related,dict):pass
-        elif isinstance(related,list):related=dict(zip(related,[0]*len(related)))
-        else:related={related:0}
+    def append(self, cls):
+        # 注册一个类实例为此窗口挂载的对象。（不同于上面__init__里那个注册）
+        self.objs.append(cls)
+        return len(self.objs) - 1
 
-        self.data = data
+    def remove(self, cls):
+        # 从挂载的对象中注销一个类实例。
+        try:
+            self.objs.remove(cls)
+        except ValueError as e:
+            raise ValueError("试图注销尚未注册的实例") from e
 
-        if   dfn==0:#用习惯了switch之后……（恼）
-            self.istree  :bool = True#T:树节点;F:图节点
-            self.parent  :None = None # type: ignore
-            self.related :dict = {}
-        elif dfn==1:
-            self.istree  :bool = all([n.istree for n in related])
-            self.parent  :None = None # type: ignore
-            self.related :dict = related
-            if self.istree:
-                if any([n.parent for n in related]):
-                    self.istree=False
-                    for rel,weight in related.items():
-                            rel.tograph()
-                            rel.related.update({self:weight})
-                else:
-                    for rel in related:
-                            rel.parent=self
-        elif dfn==2:
-            self.istree  :bool = parent.istree # type: ignore
-            self.parent  :type = parent if self.istree else None # type: ignore
-            self.related :dict = {} if self.istree else {parent:0}
-            self.parent.related.update({self:0}) # type: ignore
-        elif dfn==3:
-            self.istree  :bool = all([n.istree for n in related]) and parent.istree # type: ignore
-            self.parent  :type = parent if self.istree else None # type: ignore
-            self.related :dict = related
-            if self.parent:self.parent.related.update({self:0}) # type: ignore
-            if self.istree:
-                if any([n.parent for n in related]):
-                    parent.tograph() # type: ignore
-                    for rel,weight in related.items():
-                            rel.tograph()
-                            rel.related.update({self:weight})
-                else:
-                    for rel in related:
-                            rel.parent=self
-            else:
-                 self.related.update({parent:0})
-    def __iter__(self):
-        if self.istree:
-            if self.related:
-                subs=[self]
-                for n in self.related:
-                    subs += list(n)
-                return iter(subs)
-            else:
-                return iter([self])
-        else:
-            return iter([])
-    def __bool__(self):
-        return bool(self.data)
-    def __add__(self,val):
-        n=node(dict(list(self.related.items())+[(val,0)]),self.parent,self.data)
-        if self.istree:
-            if val.parent:
-                self.tograph()
-                val.tograph()
-                val.related.update({n:0})
-            else:
-                val.parent=n
-        else:
-            val.related.update({n:0})
-        return n
-    def __radd__(self,val):
-        return val.__add__(self)
-    @staticmethod
-    def show_graph(nodes):
-        win=tk.Tk('图:'+__name__)
-        canvas=tk.Canvas(win)
-        canvas.config(width=1024,height=1024)
-        canvas.pack()
-        lnodes=len(nodes)
-        dnode={}
-        for i,n in enumerate(nodes):
-            x,y=math.sin(2*math.pi*i/lnodes),math.cos(2*math.pi*i/lnodes)
-            canvas.create_oval(512+x*64*lnodes**0.5-128/lnodes,512+y*64*lnodes**0.5-128/lnodes,512+x*64*lnodes**0.5+128/lnodes,512+y*64*lnodes**0.5+128/lnodes)
-            canvas.create_text(512+x*64*lnodes**0.5,512+y*64*lnodes**0.5,font='"星汉等宽 CN normal" '+str(int(128/lnodes)),text=str(n.data))
-            dnode[n]=(512+x*64*lnodes**0.5,512+y*64*lnodes**0.5)
-        for n in nodes:
-            dn=dnode[n]
-            for rn,weight in n.related.items():
-                try:
-                    x00,y00,x01,y01,r=dnode[n]+dnode[rn]+(128/lnodes,)
-                    θ=math.atan2(y01-y00,x01-x00)
-                    dx,dy=r*math.cos(θ),r*math.sin(θ)
-                    x10,y10,x11,y11=x00+dx,y00+dy,x01-dx,y01-dy
-                    canvas.create_line(x10,y10,x11,y11)
-                    canvas.create_text((dn[0]+dnode[rn][0])/2,(dn[1]+dnode[rn][1])/2,font='"星汉等宽 CN normal" 16',text=str(weight))
-                except KeyError:
-                    pass
-        canvas.focus_set()
-    def tograph(self):
-        if self.istree:
-            self.istree = False
-            if self.parent:
-                self.related.update({self.parent:0})
-            [n.tograph() for n in self.related]
+    def render(self, img: Imgtype):
+        tkimg = _itk.PhotoImage(image=img)
+        # 防垃圾收集
+        self.pic = tkimg
+        self.pic_root.config(image=tkimg)
+
+
 class item:
-    hitbox:_imgtype #边缘图->碰撞箱
-    ignorehit:list[type] = None# type: ignore #忽略与XX的碰撞。类或者实例；与onlyhit冲突
-    onlyhit:list[type] = None# type: ignore #只能与XX碰撞。类或者实例；与ignorehit冲突
-    x,y=0,0
-    currentframe:frame = None# type: ignore #当前所在帧
-    def __init__(self,charlet:_imgtype,hitbox:_imgtype,hitset:list|tuple,canbepushed:bool=False) -> None:
-        #hitset:list->ignorehit,tuple->onlyhit（我真是个小天才）
-        #一切坐标以左下角为准
-        #hitbox是一张黑白图，大小和charlet一样，表示的是碰撞箱。（边缘图纯靠手画，懒得写程序里hhh）
-        self.canbepushed = canbepushed
-        self.hitbox = hitbox
-        self.charlet = charlet
-        if hitset and not set(hitset).issubset(set(VARS[Vitm])):raise ValueError('hitset无论何种情况下都不应包含未注册的item')
-        if isinstance(hitset,list):
-            self.ignorehit = hitset
-        elif isinstance(hitset,tuple):
-            self.onlyhit = list(hitset)
-        self.velocity = 0
-        self.update_frame()
-        self.ID=len(VARS.get(Vitm,[]))
-        VARS[Vitm] = VARS.get(Vitm,[])+[self]
-        self.hbcolor = [c for c in set(hitbox.getdata()) if c<(255,255,255)]#HitBoxCOLOR，碰撞箱颜色列表。（因为可能会有多碰撞箱）
-    def update_frame(self):
-        for aframe in VARS[Vfrm]:
-            if aframe.x0 <= self.x <= aframe.x1 and aframe.y0 <= self.y <= aframe.y1:
-                self.currentframe = aframe
-                aframe.hereItems.append(self)
-                break#我就不信到时候程序跑起来会有两帧是重叠的，恼。（但还是习惯性break一下）
-    def tp(self,x,y):
-        self.x,self.y=x,y
-        self.update_frame()
-    def collidingItem(self,testingPx:tuple|None=None,collidedPx:list|None=None,ignoreItems:list|None=None):
-        #返回所有和当前item碰撞的item。
-        hmx,hmy = self.hitbox.size#相对坐标
-        #collidedPx是已经计算完碰撞了的像素颜色。虽然hitbox理应是黑白图，但是不同的颜色或灰度依然可以用来标识多碰撞箱。多碰撞箱可以应用于——比如，滑槽——的场景下。
-        #testingPx是正在检验的像素颜色。
-        colItems=[]
-        ignoreItems = ignoreItems or []
-        for hx in range(hmx):
-            for hy in range(hmy):
-                pxpos=(hx,hy)#相对坐标
-                if collidedPx and self.hitbox.getpixel(pxpos) in collidedPx:continue
-                if testingPx:
-                    if self.hitbox.getpixel(pxpos) != testingPx:continue
-                else:
-                    if self.hitbox.getpixel(pxpos) < (255,255,255):continue
-                canhit:list=self.onlyhit or VARS[Vitm]
-                canhit=list(set(canhit)-set(ignoreItems)-set(self.ignorehit)-{self})
-                for aitem in canhit:
-                    if aitem.ignorehit and self in aitem.ignorehit:continue
-                    if aitem.onlyhit and self not in aitem.onlyhit:continue
-                    rahx = self.x+hx-aitem.x#rahx:相对a的x，就是最外面俩for遍历到的碰撞点相对于aitem的坐标
-                    rahy = self.y+hy-aitem.y
-                    if not (0<=rahx<=aitem.hitbox.width and 0<=rahy<=aitem.hitbox.height):continue
-                    if aitem.hitbox.getpixel((rahx,rahy)) == (255,255,255):colItems.append(aitem)
-        return colItems
-    def move_vct(self,vector:complex,forced=False):
-        dx,dy=vector.real,vector.imag
-        x,y=self.x,self.y
-        ret=0#返回值
-        #函数返回值:0执行成功 1因为被阻挡只能向x方向移动 2因为被阻挡只能向y方向移动 3因为被阻挡不能移动 4因为出帧而不能移动 5强制移动
-        if not (self.currentframe.x0<=x+dx<=self.currentframe.x1 and self.currentframe.y0<=y+dy<=self.currentframe.y1):
-            return 4#确保不会出帧。出帧的唯一方法是tp。（所以整个函数里没有update_frame。）
-        if not forced:
-            nowcolliding = []
-            for hitcolor in self.hbcolor:
-                while True:
-                    colliding = self.collidingItem(hitcolor,ignoreItems=nowcolliding)
-                    if colliding:nowcolliding.extend(colliding)
-                    else:break
-                self.x += dx#假设移动了
-                if self.collidingItem(hitcolor,ignoreItems=nowcolliding):
-                    ret+=1
-                self.x -= dx#恢复假设前的位置
-                self.y += dy
-                if self.collidingItem(hitcolor,ignoreItems=nowcolliding):
-                    ret+=2
-                self.y -= dy
-                #ret返回3说明因为被阻挡而彻底不能移动，返回1或2表示因为被阻挡而只能向其中一个方向移动。
-            if ret%2==0:self.x += dx
-            if ret//2==0:self.y += dy#根据ret的结果移动，不在上面直接移动了是因为上面一段套在for里了，在上面移动的话会移动过头
-            return ret
+    """item类表示的是物体。一切物体，除了背景以外的一切物体，都是item。"""
+
+    class SizeNotFitError(ValueError):
+        pass
+
+    class FrameNotExistError(ValueError):
+        pass
+
+    def __init__(
+        self,
+        charlet: Imgtype,
+        hitbox: Imgtype,
+        name: str = "未命名的物体",
+        onhit: Callable = _pass,
+        oncover: Callable = _pass,
+        extradata: dict | None = None,
+        mass: float = 10,
+        frict: float = 10,
+        hrZ: int = 0,
+        hbz: int = 1,
+        animation: str = "",
+        tag: str = "item",
+    ):
+        """charlet - 贴图。
+        hitbox - 碰撞框。（黑白）
+        name - 物体名称。
+        onhit - 物体与其他物体碰撞碰撞时的回调函数。
+         -应当接受两个位置参数为(this:item,other:item)
+        oncover - 物体与其他物体重叠时的回调函数。
+         -应当接受两个位置参数为(this:item,other:list[item])
+        extradata - 额外的数据。
+        mass - 质量。
+        frict - 摩擦因数。
+        hrZ - 当其他物体与hrZ不为0的物体重叠时，其Z轴会被设为hrZ。
+        hbz - 此物体的碰撞箱能碰撞到的Z层级数。
+        animation - 动画文件(.ias)路径。
+        tag - 物品类型，"item" "background"之一。
+        注：重力加速度取值固定为1。
+        其中：
+        "onlyhit"   : list[item] - 指定此物品只会与特定物品碰撞。
+        "donthit"   : list[item] - 指定此物品不会与特定物品碰撞。
+        "oninteract": dict[str,Callable] - 物体进行交互时的回调函数字典。
+         -键为交互项名称，值为交互时的回调函数。
+         -每个函数应当接受一个位置参数为i:item。
+        "onupdate"  : Callable   - 物体进行物理更新时的回调函数。
+         -应当接受一个位置参数为i:item。
+        同时定义onlyhit和donthit时，这两个列表同时生效，
+        此时碰撞对象为在onlyhit且不在donthit内的物品。
+        另外，新的item在创建之后默认挂载到frame 0的(8,8)位。
+        如果未创建任何frame，则会抛出FrameNotExist异常。"""
+
+        self.size = charlet.size
+
+        if hitbox.size != self.size:
+            raise self.SizeNotFitError("碰撞箱必须与贴图等大")
+
+        self.hitbox: np.ndarray = np.array(hitbox.convert("L")) != np.full(self.size, 255)
+        self.charlet = charlet.convert("RGBA")
+        self.name = name
+        self.extradata = extradata
+        self.onhit = onhit
+        self.oncover = oncover
+        self.mass = mass
+        self.frict = frict
+        self.hrZ = hrZ
+        self.hbz = hbz
+        # 第一个是帧号，然后俩是XY坐标（Z轴是假的，要用frame.Z_map转换为xy偏移量）
+        self.position: tuple[int, float, float, int] = (0, 8.0, 8.0, 0)
+        self.velocity = 0 + 0j  # 实部为x向右的速度，虚部为y向下的速度
+        self.tag = tag
+        self.hitclock = False
+        self.original_velocity: dict[item, complex] = {}
+        self.original_position: dict[item, tuple] = {}
+
+        if animation:
+            with open(animation, "r") as file:
+                cmd = file.readlines()
         else:
-            self.x += dx
-            self.y += dy
-            return 5
+            cmd = []
+
+        def anim():
+            while True:
+                for a in cmd or ["_pass()"]:
+                    yield a
+
+        self.anim = anim()
+
+        # ID。
+        self.ID = len(_vars.get(V_ITM, []))
+        # 注册。
+        _vars[V_ITM] = _vars.get(V_ITM, []) + [self]
+        try:
+            self.Frame: frame = _vars[V_FRM][0]
+            self.RID = self.Frame.append(self)
+        except IndexError as e:
+            raise self.FrameNotExistError("尚未创建任何frame") from e
+        if min(self.Frame.size) < 9 + max(self.size):
+            raise self.SizeNotFitError("帧尺寸过小，无法初始化物体")
+        extradata = extradata or {
+            "onlyhit": self.Frame.objs,
+            "donthit": [],
+            "oninteract": _pass,
+            "onupdate": _pass,
+        }
+        self.onlyhit: list[item]
+        self.donthit: list[item]
+        self.oninteract: Callable
+        self.onupdate: Callable
+        self.onlyhit, self.donthit, self.oninteract, self.onupdate = (
+            extradata.get("onlyhit", self.Frame.objs),
+            extradata.get("donthit", []),
+            extradata.get("oninteract", _pass),
+            extradata.get("onupdate", _pass),
+        )
+
+    @staticmethod
+    def to_r_theta(z: complex):
+        return complex(abs(z), cmath.phase(z))
+
+    @staticmethod
+    def to_x_y(z: complex):
+        return complex(z.real * cmath.cos(z.imag), z.real * cmath.sin(z.imag))
+
+    @staticmethod
+    def inrange(value: float, _min: float, _max: float):
+        return max(min(value, _max), _min)
+
+    @staticmethod
+    def lsub(lst1: list, lst2: list):
+        return [i for i in lst1 if i not in lst2]
+
+    @staticmethod
+    def land(lst1: list, lst2: list):
+        return [i for i in lst1 if i in lst2]
+
+    def undo(self, select=None):
+        self.velocity = self.original_velocity.get(self, self.velocity)
+        self.position = self.original_position.get(self, self.position)
+        [k.undo() for k in self.original_position if not select or k in select]
+
+    def update(self, _from=None):
+        self.hitclock = not _from
+
+        # 定义collide。（其实它返回的不是碰撞而是重叠hhh）
+        # 检查日志详见:checklog.md - collide
+        def collide(extra_dontcol: list[item] | None = None):
+            if not extra_dontcol:
+                extra_dontcol = []
+
+            def expand(obj: item):
+                exp_array = np.full(self.Frame.size, False, bool)
+                exp_array[
+                    int(obj.position[1]) : int(obj.position[1]) + obj.hitbox.shape[0],
+                    int(obj.position[2]) : int(obj.position[2]) + obj.hitbox.shape[1],
+                ] = obj.hitbox
+                return exp_array
+
+            self_exp = expand(self)
+            check_col_obj: list[item] = []
+            now_covering: list[item] = []
+            for obj in self.Frame.objs:
+                conds = [
+                    obj is not self,
+                    obj is not _from,
+                    obj not in self.donthit,
+                    obj in self.onlyhit,
+                    obj not in extra_dontcol,
+                    obj not in now_covering,
+                    obj.hitclock is False,
+                ]
+                if all(conds):
+                    check_col_obj.append(obj)
+            return [obj for obj in check_col_obj if (obj is not self) and (expand(obj) & self_exp).any()]
+
+        # 切帧。
+        # 检查日志详见:checklog.md - update
+        if self.Frame.ID != self.position[0]:
+            self.Frame.remove(self)
+            try:
+                self.Frame: frame = _vars[V_FRM][self.position[0]]
+            except IndexError as e:
+                raise self.FrameNotExistError("当前positon没有对应的frame") from e
+            self.RID = self.Frame.append(self)
+
+        # 碰撞计算。
+        # 检查日志详见:checklog.md - update
+        if self.frict == inf or not self.velocity:
+            self.velocity = 0j
+            return False  # 摩擦力无穷大直接动不了（思考）或者是干脆就没动。
+
+        self.velocity = complex(
+            0 if self.velocity.real is nan else self.velocity.real, 0 if self.velocity.imag is nan else self.velocity.imag
+        )
+
+        def move(pos, dx, dy):
+            ret = (pos[0], pos[1] + dx, pos[2] + dy, pos[3])
+            return ret
+
+        def try_move(dx, dy) -> list[item]:
+            if not (dx or dy):
+                return []
+            pos = copy.deepcopy(self.position)
+            max_axis_v = max(abs(dx), abs(dy), 1)
+            # dx_o、dy_o是速度等比缩放为单轴为1的结果
+            dx_o, dy_o = dx / max_axis_v, dy / max_axis_v  # 不怕ZeroDivErr是因为上面直接把可能出0的情况排掉了。
+            # 确保对于较大的v不会出现帧间高速穿墙情况
+            # while_t是循环次数，为等比缩放比例向下取整的结果。
+            while_t = int(max_axis_v)
+            ret: list[item] = []
+            for _ in range(while_t):
+                self.position = move(self.position, dx_o, dy_o)
+                ret += collide()
+            self.position = move(self.position, dx - dx_o * while_t, dy - dy_o * while_t)
+            ret += collide()
+            # 还原位置
+            self.position = pos
+            # 输出时去重
+            return list(set(ret))
+
+        def sgn(x):
+            return 0 if x == 0 else 1 if x > 0 else -1
+
+        pos_on_start = copy.deepcopy(self.position)
+
+        now_covering = collide()
+
+        direction = (sgn(self.velocity.real), sgn(self.velocity.imag))
+
+        x_col = try_move(self.velocity.real, 0)  # x方向碰撞的物体列表
+        col_obj_x = [obj for obj in x_col if (obj.mass is not inf) and (obj.frict is not inf)]
+        y_col = try_move(0, self.velocity.imag)  # y方向碰撞的物体列表
+        col_obj_y = [obj for obj in y_col if (obj.mass is not inf) and (obj.frict is not inf)]
+        moveable = (col_obj_x == x_col and self.velocity.real, col_obj_y == y_col and self.velocity.imag)
+        col_obj = list(set(col_obj_x + col_obj_y))
+        info(self.name, moveable)
+        if any(moveable):  # 能动
+            self.position = move(
+                self.position,
+                self.velocity.real * moveable[0],
+                self.velocity.imag * moveable[1],
+            )
+            for obj in col_obj:
+                side_cant = (
+                    obj in col_obj_x
+                    and not moveable[0]
+                    or obj in col_obj_y
+                    and not moveable[1]
+                    and not (obj in col_obj_x and obj in col_obj_y)
+                )
+                if side_cant:
+                    continue
+                # 退，退，退（不是）
+                ovs_0, svs_0 = copy.deepcopy(obj.velocity), copy.deepcopy(self.velocity)
+                self.original_velocity.update({obj: ovs_0})
+                self.original_position.update({obj: obj.position})
+                obj.velocity, self.velocity = (
+                    2 * self.mass * self.velocity - self.mass * obj.velocity + obj.mass * obj.velocity
+                ) / (self.mass + obj.mass), (
+                    self.mass * self.velocity - self.mass * obj.velocity + 2 * obj.mass * obj.velocity
+                ) / (
+                    self.mass + obj.mass
+                )
+                # 后知后觉（有的物体是单轴碰撞，但上面计算的是双轴碰撞，所以此处该撤回一轴的撤回）
+                obj.velocity = complex(
+                    (ovs_0.real if not moveable[0] or obj not in col_obj_x else obj.velocity.real),
+                    (ovs_0.imag if not moveable[1] or obj not in col_obj_y else obj.velocity.imag),
+                )
+                self.velocity = complex(
+                    (svs_0.real if not moveable[0] or obj not in col_obj_x else self.velocity.real),
+                    (svs_0.imag if not moveable[1] or obj not in col_obj_y else self.velocity.imag),
+                )
+                if not obj.update(self):
+                    # 寄了，有个搞不动的
+                    self.undo(col_obj_x if obj in col_obj_x else [] + col_obj_y if obj in col_obj_y else [])
+                    moveable = (
+                        False if obj in col_obj_x else moveable[0],
+                        False if obj in col_obj_y else moveable[1],
+                    )
+        else:
+            self.velocity = 0j
+            return False
+
+        # 摩擦力的计算。
+        # 检查日志详见:checklog.md - update
+        velocity = item.to_r_theta(self.velocity)
+        velocity, direction = velocity.real, velocity.imag
+        velocity = max(velocity - self.frict / max(self.mass, 1), 0)
+        self.velocity = item.to_x_y(complex(velocity, direction))
+        exec(next(self.anim), {"target": self, "_pass": _pass})
+        return self.position != pos_on_start
+
     def render(self):
-        rfrmpos=(self.x-self.currentframe.x0,self.y-self.currentframe.y0)#相对于帧的坐标,related-to-frame-position
-        cfrmpos=self.currentframe.tkframe.winfo_x(),self.currentframe.tkframe.winfo_y()#帧坐标,current-frame-...（懒的写（摆
-        rwinpos=(cfrmpos[0]+rfrmpos[0],cfrmpos[1]+rfrmpos[1])#相对于窗口的坐标
-        winx,winy = self.currentframe.root.size()
-        frmx,frmy=self.currentframe.tkframe.size()
-        nx,ny=cfrmpos
-        if winx//4 > rwinpos[0] and nx<0:
-            nx,ny=(cfrmpos[0]+rwinpos[0]-winx//4,cfrmpos[1])
-        elif winx*3//4 < rwinpos[0] and nx>winx-frmx:
-            nx,ny=(cfrmpos[0]+rwinpos[0]-winx*3//4,cfrmpos[1])
-        if winy//4 > rwinpos[1] and ny>0:
-            nx,ny=(cfrmpos[0],cfrmpos[1]+rwinpos[1]-winy//4)
-        elif winy*3//4 < rwinpos[1] and ny>winy-frmy:
-            nx,ny=(cfrmpos[0],cfrmpos[1]+rwinpos[1]-winy*3//4)
-        #上面这八行，一坨代码，都是保证玩家位置在中央50%的……hhh
-        self.currentframe.render(-nx,-ny,1)
+        x, y = self.position[1:3]
+        rootsize = self.Frame.win.size
+        rootsize0 = rootsize
+        framesize = self.Frame.size
+        scale = 1
+        if framesize[0] < rootsize[0] or framesize[1] < rootsize[1]:
+            scale = max(rootsize[0] / framesize[0], rootsize[1] / framesize[1])
+            rootsize = (int(rootsize[0]) / scale, int(rootsize[1] / scale))
+        minx, miny, maxx, maxy = (
+            x - rootsize[0] / 2,
+            y - rootsize[1] / 2,
+            x + rootsize[0] / 2,
+            y + rootsize[1] / 2,
+        )
+        if x <= rootsize[0]:
+            minx = 0
+            maxx = rootsize[0]
+        if y <= rootsize[1]:
+            miny = 0
+            maxy = rootsize[1]
+        if framesize[0] - x <= rootsize[0]:
+            minx = framesize[0] - rootsize[0]
+            maxx = framesize[0]
+        if framesize[1] - y <= rootsize[1]:
+            miny = framesize[1] - rootsize[1]
+            maxy = framesize[1]
+        minx, miny, maxx, maxy = int(minx), int(miny), int(maxx), int(maxy)
+        return self.Frame.render().crop((minx, miny, maxx, maxy)).resize(rootsize0)
+
+
+class frame:
+    """每个frame是一个区域，游戏内所有活动都在区域内进行。
+    frame之间不能直接跨越。同时，渲染时也只会渲染本frame。"""
+
+    # 挂载于此frame的对象列表，其索引为ID。
+    objs: list[item] = []
+
+    def __init__(self, root: window, texture: Imgtype, Z_map: Callable | None = None):
+        """root - window实例，frame所在窗口。
+        texture - 帧背景。"""
+        # 创建frame。
+        self.frame: tk.Frame = tk.Frame()
+        # ID。
+        self.ID = len(_vars.get(V_FRM, []))
+        # 注册。
+        _vars[V_FRM] = _vars.get(V_FRM, []) + [self]
+        self.RID = root.append(self)
+        self.win = root
+        self.root = root.win
+        self.texture = texture.convert("RGBA")
+        self.size = texture.size
+        self.Z_map = Z_map or (lambda z: (-z, -2 * z))
+
+    def append(self, cls):
+        # 注册一个类实例为此帧挂载的对象。
+        self.objs.append(cls)
+        return len(self.objs) - 1
+
+    def remove(self, cls):
+        # 从挂载的对象中注销一个类实例。
+        try:
+            self.objs.remove(cls)
+        except ValueError as e:
+            raise ValueError("试图注销尚未注册的实例") from e
+
+    def update(self):
+        for obj in self.objs:
+            obj.update()
+
+    def render(self):
+        render_base = self.texture.convert("RGBA").copy()
+        for obj in self.objs:
+            render_base.paste(
+                obj.charlet,
+                (
+                    int(self.Z_map(obj.position[3])[0] + obj.position[1]),
+                    int(self.Z_map(obj.position[3])[1] + obj.position[2]),
+                ),
+                mask=obj.charlet,
+            )
+        for obj in self.objs:
+            obj.hitclock = False
+        return render_base

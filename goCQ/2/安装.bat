@@ -1,3 +1,0 @@
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ -r requirements.txt
-pip install --upgrade nonebot2 -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pause

@@ -24,7 +24,7 @@ class _FormData(FormData):
     def _gen_form_data(self) -> multipart.MultipartWriter:
         """Encode a list of fields using the multipart/form-data MIME format"""
         if self._is_processed:
-            return self._writer   # rewrite this part of FormData object to enable retry of request
+            return self._writer  # rewrite this part of FormData object to enable retry of request
         for dispparams, headers, value in self._fields:
             try:
                 if hdrs.CONTENT_TYPE in headers:
@@ -35,20 +35,15 @@ class _FormData(FormData):
                         encoding=self._charset,
                     )
                 else:
-                    part = payload.get_payload(
-                        value, headers=headers, encoding=self._charset
-                    )
+                    part = payload.get_payload(value, headers=headers, encoding=self._charset)
             except Exception as exc:
                 print(value)
                 raise TypeError(
-                    "Can not serialize value type: %r\n "
-                    "headers: %r\n value: %r" % (type(value), headers, value)
+                    "Can not serialize value type: %r\n " "headers: %r\n value: %r" % (type(value), headers, value)
                 ) from exc
 
             if dispparams:
-                part.set_content_disposition(
-                    "form-data", quote_fields=self._quote_fields, **dispparams
-                )
+                part.set_content_disposition("form-data", quote_fields=self._quote_fields, **dispparams)
                 assert part.headers is not None
                 part.headers.popall(hdrs.CONTENT_LENGTH, None)
 

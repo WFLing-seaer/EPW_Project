@@ -35,4 +35,4 @@ class Channel:
         self.event_id = event_id
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})

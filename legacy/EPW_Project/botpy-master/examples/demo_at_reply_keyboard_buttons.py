@@ -27,7 +27,7 @@ async def send_template_keyboard(channel_id, msg_id):
     msg_api = qqbot.AsyncMessageAPI(t_token, False)
 
     markdown = MessageMarkdown(content="# 123 \n 今天是个好天气")
-    keyword: MessageKeyboard = MessageKeyboard(id='62')
+    keyword: MessageKeyboard = MessageKeyboard(id="62")
     send = qqbot.MessageSendRequest(markdown=markdown, msg_id=msg_id, keyboard=keyword)
     # 通过api发送回复消息
     await msg_api.post_message(channel_id, send)
@@ -48,19 +48,7 @@ def build_a_demo_keyboard() -> MessageKeyboard:
     创建一个只有一行且该行只有一个 button 的键盘
     """
     button1 = Button(
-        '1',
-        RenderData(
-            "button",
-            "BUTTON",
-            0
-        ),
-        Action(
-            2,
-            Permission(2, specify_role_ids=["1"]),
-            10,
-            "/搜索",
-            True
-        )
+        "1", RenderData("button", "BUTTON", 0), Action(2, Permission(2, specify_role_ids=["1"]), 10, "/搜索", True)
     )
     row1 = InlineKeyboardRow([button1])
     inline_keyboard = InlineKeyboard([row1])

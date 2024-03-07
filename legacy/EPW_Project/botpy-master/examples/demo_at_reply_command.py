@@ -45,7 +45,6 @@ class MyClient(botpy.Client):
                 return
 
 
-
 if __name__ == "__main__":
     # 通过预设置的类型，设置需要监听的事件通道
     # intents = botpy.Intents.none()

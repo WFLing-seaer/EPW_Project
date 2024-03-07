@@ -1,0 +1,2 @@
+target.charlet = __import__('PIL.Image').open('resources/pict/DEMO-001_sprt.png')
+target.charlet = __import__('PIL.Image').open('resources/pict/DEMO-002_sprt.png')

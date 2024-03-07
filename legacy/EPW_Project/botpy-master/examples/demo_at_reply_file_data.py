@@ -25,7 +25,9 @@ class MyClient(botpy.Client):
         with open("resource/test.png", "rb") as img:
             await message.reply(content=f"机器人{self.robot.name}收到你的@消息了: {message.content}", file_image=img)
         # 方法3（直接传入图片路径）：
-        await message.reply(content=f"机器人{self.robot.name}收到你的@消息了: {message.content}", file_image="resource/test.png")
+        await message.reply(
+            content=f"机器人{self.robot.name}收到你的@消息了: {message.content}", file_image="resource/test.png"
+        )
 
 
 if __name__ == "__main__":

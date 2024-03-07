@@ -7,7 +7,7 @@ class Member:
 
     def __init__(self, api: BotAPI, event_id, data: user.GuildMemberPayload):
         self._api = api
-        
+
         self.user = self._User(data.get("user", {}))
         self.nick = data.get("nick", None)
         self.roles = data.get("roles", None)
@@ -16,7 +16,7 @@ class Member:
         self.guild_id = data.get("guild_id", None)
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})
 
     class _User:
         def __init__(self, data):

@@ -179,9 +179,7 @@ class APITestCase(unittest.TestCase):
 
     def test_post_recommend_channel(self):
         channel_list = [{"channel_id": CHANNEL_ID, "introduce": "introduce"}]
-        result = self.loop.run_until_complete(
-            self.api.create_recommend_announce(GUILD_ID, AnnouncesType.MEMBER, channel_list)
-        )
+        result = self.loop.run_until_complete(self.api.create_recommend_announce(GUILD_ID, AnnouncesType.MEMBER, channel_list))
         self.assertEqual(len(channel_list), len(result["recommend_channels"]))
 
     def test_get_permissions(self):

@@ -98,12 +98,12 @@ def get_logger(name=None):
 
 
 def configure_logging(
-        config: Union[str, dict] = None,
-        _format: str = None,
-        level: int = None,
-        bot_log: Union[bool, None] = True,
-        ext_handlers: Union[dict, List, bool] = None,
-        force: bool = False
+    config: Union[str, dict] = None,
+    _format: str = None,
+    level: int = None,
+    bot_log: Union[bool, None] = True,
+    ext_handlers: Union[dict, List, bool] = None,
+    force: bool = False,
 ) -> None:
     """
     修改日志配置
@@ -130,9 +130,7 @@ def configure_logging(
         else:
             # See the note about fileConfig() here:
             # https://docs.python.org/3/library/logging.config.html#configuration-file-format
-            logging.config.fileConfig(
-                config, disable_existing_loggers=False
-            )
+            logging.config.fileConfig(config, disable_existing_loggers=False)
 
     if _format is not None:
         logging.basicConfig(format=_format)

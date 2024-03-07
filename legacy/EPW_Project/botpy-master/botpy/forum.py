@@ -68,13 +68,7 @@ class _Url:
 
 
 class Thread:
-    __slots__ = (
-        "_api",
-        "thread_info",
-        "channel_id",
-        "guild_id",
-        "author_id",
-        "event_id")
+    __slots__ = ("_api", "thread_info", "channel_id", "guild_id", "author_id", "event_id")
 
     def __init__(self, api: BotAPI, event_id, data: forum.Thread):
         self._api = api
@@ -86,7 +80,7 @@ class Thread:
         self.event_id = event_id
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})
 
     class _ThreadInfo:
         def __init__(self, data):
@@ -153,13 +147,7 @@ class Thread:
 
 
 class OpenThread:
-    __slots__ = (
-        "_api",
-        "thread_info",
-        "channel_id",
-        "guild_id",
-        "author_id",
-        "event_id")
+    __slots__ = ("_api", "thread_info", "channel_id", "guild_id", "author_id", "event_id")
 
     def __init__(self, api: BotAPI, data: forum.OpenForumEvent):
         self._api = api
@@ -169,4 +157,4 @@ class OpenThread:
         self.author_id = data.get("author_id", None)
 
     def __repr__(self):
-        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith('_')})
+        return str({items: str(getattr(self, items)) for items in self.__slots__ if not items.startswith("_")})

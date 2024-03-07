@@ -36,4 +36,3 @@ class Commands:
                 return False
 
         return decorated
-
