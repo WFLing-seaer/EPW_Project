@@ -39,8 +39,8 @@ def load():
         _vars = _pickle.load(db)
 
 
-def info(*args):
-    logging.info(" ".join([str(c) for c in args]))
+def warning(*args):
+    logging.warning(" ".join([str(c) for c in args]))
 
 
 # 类定义
@@ -342,17 +342,88 @@ class item:
         direction = (sgn(self.velocity.real), sgn(self.velocity.imag))
 
         x_col = try_move(self.velocity.real, 0)  # x方向碰撞的物体列表
-        col_obj_x = [obj for obj in x_col if (obj.mass is not inf) and (obj.frict is not inf)]
+        col_obj_x = [obj for obj in x_col if (obj.mass != inf) and (obj.frict != inf)]
         y_col = try_move(0, self.velocity.imag)  # y方向碰撞的物体列表
-        col_obj_y = [obj for obj in y_col if (obj.mass is not inf) and (obj.frict is not inf)]
-        moveable = (col_obj_x == x_col and self.velocity.real, col_obj_y == y_col and self.velocity.imag)
+        col_obj_y = [obj for obj in y_col if (obj.mass != inf) and (obj.frict != inf)]
+        moveable = (self.velocity.real and col_obj_x == x_col, self.velocity.imag and col_obj_y == y_col)
         col_obj = list(set(col_obj_x + col_obj_y))
-        info(self.name, moveable)
+        if not col_obj:
+            # 没有碰撞
+            self.position = move(
+                self.position,
+                self.velocity.real,
+                self.velocity.imag,
+            )
+            return True
+        trying_dv = (0, 0)  # 初始化一下
+        if moveable.count(False) == 1:  # 一个轴不能动。moveable的值：0.0没想动，True能动，False动不了。
+            x_cant_move = moveable[0] is False  # True是x不能动，False是y不能动。
+            stuck_axis_v = self.velocity.real if x_cant_move else self.velocity.imag  # 动不了的轴的速度
+            another_axis_v = self.velocity.imag if x_cant_move else self.velocity.real  # 能动的轴的速度
+            ssav = sgn(stuck_axis_v)  # Sign of Stuck Axis Velocity(SSAV)
+            saav = sgn(another_axis_v)
+            fsaav = (_from and sgn(_from.velocity.imag if x_cant_move else _from.velocity.real)) or 0
+            trying_move: list[int] = []  # 尝试对角移动的象限。是个列表，因为可能不止一个象限要尝试。
+            if x_cant_move:
+                if ssav == 1:
+                    # 可以尝试的象限有一、四象限。
+                    if saav == 1 or fsaav == 1:
+                        # or fssav是因为，如果碰撞源有速度分量，那么此时的象限选择也应该有倾向。
+                        # 而不是像else里那样两边都试。
+                        trying_move.append(1)
+                        # 第一象限在渲染时是右下角，而非平面直角坐标系中的右上角。因为对于坐标系统来说向下才是x轴正方向。
+                        # （虽然说第一象限的xy取值仍然是x>0 y>0……）
+                    elif saav == -1 or fsaav == -1:
+                        trying_move.append(4)
+                    else:
+                        trying_move.extend([4, 1])  # 左上、右上（三四象限）优先。
+                else:
+                    # 可以尝试的象限有二、三象限。
+                    if saav == 1:
+                        trying_move.append(2)
+                    elif saav == -1:
+                        trying_move.append(3)
+                    else:
+                        trying_move.extend([3, 2])
+            else:
+                # 是y轴动不了。
+                if ssav == 1:
+                    # 可以尝试的象限有一、二象限。
+                    if saav == 1 or fsaav == 1:
+                        trying_move.append(1)
+                    elif saav == -1 or fsaav == -1:
+                        trying_move.append(2)
+                    else:
+                        trying_move.extend([1, 2])
+                else:
+                    # 可以尝试的象限有三、四象限。
+                    if saav == 1:
+                        trying_move.append(4)
+                    elif saav == -1:
+                        trying_move.append(3)
+                    else:
+                        trying_move.extend([4, 3])
+            # 经过上面的一堆if，总算是搞出来应该尝试的方向了。对吧……（思考）（放弃思考）
+            # 然后，对于可能的方向，直接try_move就行。
+            for trying_direction in trying_move:
+                trying_dv = ((1, 1), (-1, 1), (-1, -1), (1, -1))[trying_direction - 1]
+                try_result = try_move(*trying_dv)
+                if [obj for obj in try_result if (obj.mass != inf) and (obj.frict != inf)] == try_result:
+                    # 找到一个能动的方向
+                    moveable = (True, True)  # 俩true是因为此处尝试的是对角移动。
+                    x_col += try_result
+                    col_obj_x += try_result
+                    y_col += try_result
+                    col_obj_y += try_result
+                    col_obj = list(set(col_obj + try_result))
+                    break
+                    # trying_dv会“剩”到外面（因为for循环结束后不会销毁变量，所以循环外的变量就是最后一次循环时的值）
+
         if any(moveable):  # 能动
             self.position = move(
                 self.position,
-                self.velocity.real * moveable[0],
-                self.velocity.imag * moveable[1],
+                self.velocity.real * moveable[0] + trying_dv[0],
+                self.velocity.imag * moveable[1] + trying_dv[1],
             )
             for obj in col_obj:
                 side_cant = (

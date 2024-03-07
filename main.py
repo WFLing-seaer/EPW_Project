@@ -5,7 +5,7 @@ from data import classes as cls
 from PIL import Image
 import keyboard as kbo
 
-info = cls.info
+info = cls.warning
 
 win = cls.window((1920, 1080))
 frm = cls.frame(win, Image.open("resources/pict/backboard.png"))
@@ -29,7 +29,7 @@ item3 = cls.item(
     Image.open("resources/pict/SLOT-001_sprt.png"),
     Image.open("resources/pict/SLOT-001_hbox.png"),
     "test3",
-    mass=32,  # float("inf"),
+    mass=float("inf"),
     frict=float("inf"),
     extradata={"onlyhit": [item1]},
 )
