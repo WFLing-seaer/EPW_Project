@@ -3,7 +3,7 @@
 # © 2023-2024 水晴明、凌晚枫 All rights reserved.
 
 # 导入
-import math, cmath, os, copy, logging, pickle as _pickle, tkinter as tk, numpy as np
+import math, time, cmath, os, copy, logging, threading as trd, pickle as _pickle, tkinter as tk, numpy as np
 
 from . import config
 from PIL import Image as _img, ImageTk as _itk
@@ -36,11 +36,13 @@ def dump():
 
 def load():
     with open(config.DATA, "rb") as db:
+        global _vars
         _vars = _pickle.load(db)
 
 
 def warning(*args):
-    logging.warning(" ".join([str(c) for c in args]))
+    string = " ".join([str(c) for c in args])
+    logging.warning(string)
 
 
 # 类定义
@@ -106,10 +108,13 @@ class window:
             raise ValueError("试图注销尚未注册的实例") from e
 
     def render(self, img: Imgtype):
+        start_time = time.time()
         tkimg = _itk.PhotoImage(image=img)
         # 防垃圾收集
         self.pic = tkimg
         self.pic_root.config(image=tkimg)
+        self.win.update()
+        warning("窗口渲染耗时", time.time() - start_time)
 
 
 class item:
@@ -254,6 +259,7 @@ class item:
         [k.undo() for k in self.original_position if not select or k in select]
 
     def update(self, _from=None):
+        start_time = time.time()
         self.hitclock = not _from
 
         # 定义collide。（其实它返回的不是碰撞而是重叠hhh）
@@ -287,6 +293,9 @@ class item:
                     check_col_obj.append(obj)
             return [obj for obj in check_col_obj if (obj is not self) and (expand(obj) & self_exp).any()]
 
+        check = time.time()
+        warning("第一阶段（定义col）所需时间：", check - start_time)
+        start_time = check
         # 切帧。
         # 检查日志详见:checklog.md - update
         if self.Frame.ID != self.position[0]:
@@ -297,6 +306,9 @@ class item:
                 raise self.FrameNotExistError("当前positon没有对应的frame") from e
             self.RID = self.Frame.append(self)
 
+        check = time.time()
+        warning("第二阶段（切帧）所需时间：", check - start_time)
+        start_time = check
         # 碰撞计算。
         # 检查日志详见:checklog.md - update
         if self.frict == inf or not self.velocity:
@@ -311,7 +323,15 @@ class item:
             ret = (pos[0], pos[1] + dx, pos[2] + dy, pos[3])
             return ret
 
+        target = move(self.position, self.velocity.real, self.velocity.imag)
+        if not (
+            1 < target[1] < self.Frame.size[0] - self.size[0] - 1 and 1 < target[2] < self.Frame.size[1] - self.size[1] - 1
+        ):
+            self.velocity = 0j
+            return False  # 碰到边界就停下。
+
         def try_move(dx, dy) -> list[item]:
+            nonlocal now_covering
             if not (dx or dy):
                 return []
             pos = copy.deepcopy(self.position)
@@ -335,9 +355,14 @@ class item:
         def sgn(x):
             return 0 if x == 0 else 1 if x > 0 else -1
 
+        check = time.time()
+        warning("第三阶段（346开始计算）所需时间：", check - start_time)
+        start_time = check
+
         pos_on_start = copy.deepcopy(self.position)
 
         now_covering = collide()
+        warning(self.name, "nc:", [n.name for n in now_covering])
 
         direction = (sgn(self.velocity.real), sgn(self.velocity.imag))
 
@@ -346,7 +371,8 @@ class item:
         y_col = try_move(0, self.velocity.imag)  # y方向碰撞的物体列表
         col_obj_y = [obj for obj in y_col if (obj.mass != inf) and (obj.frict != inf)]
         moveable = (self.velocity.real and col_obj_x == x_col, self.velocity.imag and col_obj_y == y_col)
-        col_obj = list(set(col_obj_x + col_obj_y))
+        col_obj = list(set(x_col + y_col))
+        warning(moveable, self.name, [o.name for o in col_obj])
         if not col_obj:
             # 没有碰撞
             self.position = move(
@@ -354,118 +380,130 @@ class item:
                 self.velocity.real,
                 self.velocity.imag,
             )
-            return True
-        trying_dv = (0, 0)  # 初始化一下
-        if moveable.count(False) == 1:  # 一个轴不能动。moveable的值：0.0没想动，True能动，False动不了。
-            x_cant_move = moveable[0] is False  # True是x不能动，False是y不能动。
-            stuck_axis_v = self.velocity.real if x_cant_move else self.velocity.imag  # 动不了的轴的速度
-            another_axis_v = self.velocity.imag if x_cant_move else self.velocity.real  # 能动的轴的速度
-            ssav = sgn(stuck_axis_v)  # Sign of Stuck Axis Velocity(SSAV)
-            saav = sgn(another_axis_v)
-            fsaav = (_from and sgn(_from.velocity.imag if x_cant_move else _from.velocity.real)) or 0
-            trying_move: list[int] = []  # 尝试对角移动的象限。是个列表，因为可能不止一个象限要尝试。
-            if x_cant_move:
-                if ssav == 1:
-                    # 可以尝试的象限有一、四象限。
-                    if saav == 1 or fsaav == 1:
-                        # or fssav是因为，如果碰撞源有速度分量，那么此时的象限选择也应该有倾向。
-                        # 而不是像else里那样两边都试。
-                        trying_move.append(1)
-                        # 第一象限在渲染时是右下角，而非平面直角坐标系中的右上角。因为对于坐标系统来说向下才是x轴正方向。
-                        # （虽然说第一象限的xy取值仍然是x>0 y>0……）
-                    elif saav == -1 or fsaav == -1:
-                        trying_move.append(4)
-                    else:
-                        trying_move.extend([4, 1])  # 左上、右上（三四象限）优先。
-                else:
-                    # 可以尝试的象限有二、三象限。
-                    if saav == 1:
-                        trying_move.append(2)
-                    elif saav == -1:
-                        trying_move.append(3)
-                    else:
-                        trying_move.extend([3, 2])
-            else:
-                # 是y轴动不了。
-                if ssav == 1:
-                    # 可以尝试的象限有一、二象限。
-                    if saav == 1 or fsaav == 1:
-                        trying_move.append(1)
-                    elif saav == -1 or fsaav == -1:
-                        trying_move.append(2)
-                    else:
-                        trying_move.extend([1, 2])
-                else:
-                    # 可以尝试的象限有三、四象限。
-                    if saav == 1:
-                        trying_move.append(4)
-                    elif saav == -1:
-                        trying_move.append(3)
-                    else:
-                        trying_move.extend([4, 3])
-            # 经过上面的一堆if，总算是搞出来应该尝试的方向了。对吧……（思考）（放弃思考）
-            # 然后，对于可能的方向，直接try_move就行。
-            for trying_direction in trying_move:
-                trying_dv = ((1, 1), (-1, 1), (-1, -1), (1, -1))[trying_direction - 1]
-                try_result = try_move(*trying_dv)
-                if [obj for obj in try_result if (obj.mass != inf) and (obj.frict != inf)] == try_result:
-                    # 找到一个能动的方向
-                    moveable = (True, True)  # 俩true是因为此处尝试的是对角移动。
-                    x_col += try_result
-                    col_obj_x += try_result
-                    y_col += try_result
-                    col_obj_y += try_result
-                    col_obj = list(set(col_obj + try_result))
-                    break
-                    # trying_dv会“剩”到外面（因为for循环结束后不会销毁变量，所以循环外的变量就是最后一次循环时的值）
-
-        if any(moveable):  # 能动
-            self.position = move(
-                self.position,
-                self.velocity.real * moveable[0] + trying_dv[0],
-                self.velocity.imag * moveable[1] + trying_dv[1],
-            )
-            for obj in col_obj:
-                side_cant = (
-                    obj in col_obj_x
-                    and not moveable[0]
-                    or obj in col_obj_y
-                    and not moveable[1]
-                    and not (obj in col_obj_x and obj in col_obj_y)
-                )
-                if side_cant:
-                    continue
-                # 退，退，退（不是）
-                ovs_0, svs_0 = copy.deepcopy(obj.velocity), copy.deepcopy(self.velocity)
-                self.original_velocity.update({obj: ovs_0})
-                self.original_position.update({obj: obj.position})
-                obj.velocity, self.velocity = (
-                    2 * self.mass * self.velocity - self.mass * obj.velocity + obj.mass * obj.velocity
-                ) / (self.mass + obj.mass), (
-                    self.mass * self.velocity - self.mass * obj.velocity + 2 * obj.mass * obj.velocity
-                ) / (
-                    self.mass + obj.mass
-                )
-                # 后知后觉（有的物体是单轴碰撞，但上面计算的是双轴碰撞，所以此处该撤回一轴的撤回）
-                obj.velocity = complex(
-                    (ovs_0.real if not moveable[0] or obj not in col_obj_x else obj.velocity.real),
-                    (ovs_0.imag if not moveable[1] or obj not in col_obj_y else obj.velocity.imag),
-                )
-                self.velocity = complex(
-                    (svs_0.real if not moveable[0] or obj not in col_obj_x else self.velocity.real),
-                    (svs_0.imag if not moveable[1] or obj not in col_obj_y else self.velocity.imag),
-                )
-                if not obj.update(self):
-                    # 寄了，有个搞不动的
-                    self.undo(col_obj_x if obj in col_obj_x else [] + col_obj_y if obj in col_obj_y else [])
-                    moveable = (
-                        False if obj in col_obj_x else moveable[0],
-                        False if obj in col_obj_y else moveable[1],
-                    )
         else:
-            self.velocity = 0j
-            return False
+            trying_dv = (0, 0)  # 初始化一下
+            warning("\tbranch:::360", self.name)
+            if (moveable[0] is False) != (moveable[1] is False):
+                warning("\t\tbranch:::361", self.name)
+                # 一个轴不能动。moveable的值：0.0没想动，True能动，False动不了。
+                # 用异或不用count==1是因为count(False)会把0也算进去。
+                x_cant_move = moveable[0] is False  # True是x不能动，False是y不能动。
+                stuck_axis_v = self.velocity.real if x_cant_move else self.velocity.imag  # 动不了的轴的速度
+                another_axis_v = self.velocity.imag if x_cant_move else self.velocity.real  # 能动的轴的速度
+                ssav = sgn(stuck_axis_v)  # Sign of Stuck Axis Velocity(SSAV)
+                saav = sgn(another_axis_v)
+                fsaav = (_from and sgn(_from.velocity.imag if x_cant_move else _from.velocity.real)) or 0
+                trying_move: list[int] = []  # 尝试对角移动的象限。是个列表，因为可能不止一个象限要尝试。
+                if x_cant_move:
+                    if ssav == 1:
+                        # 可以尝试的象限有一、四象限。
+                        if saav == 1 or fsaav == 1:
+                            # or fssav是因为，如果碰撞源有速度分量，那么此时的象限选择也应该有倾向。
+                            # 而不是像else里那样两边都试。
+                            trying_move.append(1)
+                            # 第一象限在渲染时是右下角，而非平面直角坐标系中的右上角。因为对于坐标系统来说向下才是x轴正方向。
+                            # （虽然说第一象限的xy取值仍然是x>0 y>0……）
+                        elif saav == -1 or fsaav == -1:
+                            trying_move.append(4)
+                        else:
+                            trying_move.extend([4, 1])  # 左上、右上（三四象限）优先。
+                    else:
+                        # 可以尝试的象限有二、三象限。
+                        if saav == 1:
+                            trying_move.append(2)
+                        elif saav == -1:
+                            trying_move.append(3)
+                        else:
+                            trying_move.extend([3, 2])
+                else:
+                    # 是y轴动不了。
+                    if ssav == 1:
+                        # 可以尝试的象限有一、二象限。
+                        if saav == 1 or fsaav == 1:
+                            trying_move.append(1)
+                        elif saav == -1 or fsaav == -1:
+                            trying_move.append(2)
+                        else:
+                            trying_move.extend([1, 2])
+                    else:
+                        # 可以尝试的象限有三、四象限。
+                        if saav == 1:
+                            trying_move.append(4)
+                        elif saav == -1:
+                            trying_move.append(3)
+                        else:
+                            trying_move.extend([4, 3])
+                # 经过上面的一堆if，总算是搞出来应该尝试的方向了。对吧……（思考）（放弃思考）
+                # 然后，对于可能的方向，直接try_move就行。
+                for trying_direction in trying_move:
+                    trying_dv = ((2, 2), (-2, 2), (-2, -2), (2, -2))[trying_direction - 1]
+                    try_result = try_move(*trying_dv)
+                    if [obj for obj in try_result if (obj.mass != inf) and (obj.frict != inf)] == try_result:
+                        # 找到一个能动的方向
+                        moveable = (True, True)  # 俩true是因为此处尝试的是对角移动。
+                        x_col = try_result
+                        y_col = try_result
+                        col_obj = list(set(try_result))
+                        break
+                        # trying_dv会“剩”到外面（因为for循环结束后不会销毁变量，所以循环外的变量就是最后一次循环时的值）
 
+            if any(moveable):  # 能动
+                warning("\t\t\tdv:", trying_dv, self.name)
+                self.position = move(
+                    self.position,
+                    self.velocity.real * moveable[0] + trying_dv[0],
+                    self.velocity.imag * moveable[1] + trying_dv[1],
+                )
+                for obj in col_obj:
+                    side_cant = (
+                        obj in col_obj_x
+                        and not moveable[0]
+                        or obj in col_obj_y
+                        and not moveable[1]
+                        and not (obj in col_obj_x and obj in col_obj_y)
+                    )
+                    if side_cant:
+                        warning("sc:::continue")
+                        continue
+                    # 退，退，退（不是）
+                    ovs_0, svs_0 = copy.deepcopy(obj.velocity), copy.deepcopy(self.velocity)
+                    self.original_velocity.update({obj: ovs_0})
+                    self.original_position.update({obj: obj.position})
+                    obj.velocity, self.velocity = (
+                        2 * self.mass * self.velocity - self.mass * obj.velocity + obj.mass * obj.velocity
+                    ) / (self.mass + obj.mass), (
+                        self.mass * self.velocity - self.mass * obj.velocity + 2 * obj.mass * obj.velocity
+                    ) / (
+                        self.mass + obj.mass
+                    )
+                    # 后知后觉（有的物体是单轴碰撞，但上面计算的是双轴碰撞，所以此处该撤回一轴的撤回）
+                    obj.velocity = complex(
+                        (ovs_0.real if not moveable[0] or obj not in col_obj_x else obj.velocity.real),
+                        (ovs_0.imag if not moveable[1] or obj not in col_obj_y else obj.velocity.imag),
+                    )
+                    self.velocity = complex(
+                        (svs_0.real if not moveable[0] or obj not in col_obj_x else self.velocity.real),
+                        (svs_0.imag if not moveable[1] or obj not in col_obj_y else self.velocity.imag),
+                    )
+                    success = obj.update(self)
+                    warning("upd:", self.name, obj.name, success)
+                    if not success:
+                        # 寄了，有个搞不动的
+                        warning("\t\t\t\tundo:", self.name, obj.name)
+                        self.undo(col_obj_x if obj in col_obj_x else [] + col_obj_y if obj in col_obj_y else [])
+                        self.position = pos_on_start
+                        self.velocity = 0j
+                        moveable = (
+                            False if obj in col_obj_x else moveable[0],
+                            False if obj in col_obj_y else moveable[1],
+                        )
+            else:
+                self.velocity = 0j
+                return False
+
+        check = time.time()
+        warning("第四阶段（全体碰撞更新）所需时间：", check - start_time)
+        start_time = check
         # 摩擦力的计算。
         # 检查日志详见:checklog.md - update
         velocity = item.to_r_theta(self.velocity)
@@ -473,9 +511,14 @@ class item:
         velocity = max(velocity - self.frict / max(self.mass, 1), 0)
         self.velocity = item.to_x_y(complex(velocity, direction))
         exec(next(self.anim), {"target": self, "_pass": _pass})
+
+        check = time.time()
+        warning("第五阶段（摩擦力更新）所需时间：", check - start_time)
+        start_time = check
         return self.position != pos_on_start
 
     def render(self):
+        start_time = time.time()
         x, y = self.position[1:3]
         rootsize = self.Frame.win.size
         rootsize0 = rootsize
@@ -503,7 +546,11 @@ class item:
             miny = framesize[1] - rootsize[1]
             maxy = framesize[1]
         minx, miny, maxx, maxy = int(minx), int(miny), int(maxx), int(maxy)
-        return self.Frame.render().crop((minx, miny, maxx, maxy)).resize(rootsize0)
+
+        check = time.time()
+        ret = self.Frame.render().crop((minx, miny, maxx, maxy)).resize(rootsize0)
+        warning("单物体渲染所需时间：", check - start_time)
+        return ret
 
 
 class frame:
@@ -542,10 +589,13 @@ class frame:
             raise ValueError("试图注销尚未注册的实例") from e
 
     def update(self):
+        start_time = time.time()
         for obj in self.objs:
             obj.update()
+        warning("帧更新所需时间：", time.time() - start_time)
 
     def render(self):
+        start_time = time.time()
         render_base = self.texture.convert("RGBA").copy()
         for obj in self.objs:
             render_base.paste(
@@ -558,4 +608,5 @@ class frame:
             )
         for obj in self.objs:
             obj.hitclock = False
+        warning("帧渲染所需时间：", time.time() - start_time)
         return render_base

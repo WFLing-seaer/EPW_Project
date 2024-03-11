@@ -4,11 +4,12 @@
 from data import classes as cls
 from PIL import Image
 import keyboard as kbo
+import time
 
 info = cls.warning
 
-win = cls.window((1920, 1080))
-frm = cls.frame(win, Image.open("resources/pict/backboard.png"))
+win = cls.window()  # (1920, 1080))
+frm = cls.frame(win, Image.open("resources/pict/backboard_small.png"))
 item0 = cls.item(
     Image.open("resources/pict/DEMO-001_sprt.png"),
     Image.open("resources/pict/DEMO-001_hbox.png"),
@@ -16,14 +17,14 @@ item0 = cls.item(
     lambda a, b: info("撞击", a.name, [(b.name) for b in b]),
     lambda a, b: info("重叠", a.name, [b.name for b in b]),
 )
-item1 = cls.item(
+"""item1 = cls.item(
     Image.open("resources/pict/SLIDE-001_sprt.png"),
     Image.open("resources/pict/SLIDE-001_hbox.png"),
     "test2",
     lambda a, b: info("撞击", a.name, [(b.name) for b in b]),
     lambda a, b: info("重叠", a.name, [b.name for b in b]),
     mass=20,
-    frict=2,
+    frict=5,
 )
 item3 = cls.item(
     Image.open("resources/pict/SLOT-001_sprt.png"),
@@ -31,10 +32,9 @@ item3 = cls.item(
     "test3",
     mass=float("inf"),
     frict=float("inf"),
-    extradata={"onlyhit": [item1]},
 )
 item1.position = (0, 250, 100, 0)
-item3.position = (0, 100, 100, 0)
+item3.position = (0, 100, 100, 0)"""
 item0.position = (0, 220, 100, 0)
 while True:
     v = 0j
@@ -50,6 +50,18 @@ while True:
         del win
         break
     item0.velocity = v
-    frm.update()
-    win.render(item0.render())
-    win.win.update()
+    start_time = time.time()
+    frm.update()  ###
+    check = time.time()
+    info("frame.update所需时间：", check - start_time)
+    start_time = check
+    i = item0.render()  ###
+    check = time.time()
+    info("item.render所需时间：", check - start_time)
+    start_time = check
+    win.render(i)  ###
+    check = time.time()
+    info("win.render所需时间：", check - start_time)
+    start_time = check
+    win.win.update()  ###
+    info("win.update耗时：", time.time() - start_time)
