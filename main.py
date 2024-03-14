@@ -4,9 +4,11 @@
 from data import classes as cls
 from PIL import Image
 import keyboard as kbo
-import time
+import time, math
 
-info = cls.warning
+pi = math.pi
+
+info = lambda *_: None  # cls.warning
 
 win = cls.window()  # (1920, 1080))
 frm = cls.frame(win, Image.open("resources/pict/backboard_small.png"))
@@ -17,7 +19,7 @@ item0 = cls.item(
     lambda a, b: info("撞击", a.name, [(b.name) for b in b]),
     lambda a, b: info("重叠", a.name, [b.name for b in b]),
 )
-"""item1 = cls.item(
+item1 = cls.item(
     Image.open("resources/pict/SLIDE-001_sprt.png"),
     Image.open("resources/pict/SLIDE-001_hbox.png"),
     "test2",
@@ -26,26 +28,26 @@ item0 = cls.item(
     mass=20,
     frict=5,
 )
-item3 = cls.item(
+"""item3 = cls.item(
     Image.open("resources/pict/SLOT-001_sprt.png"),
     Image.open("resources/pict/SLOT-001_hbox.png"),
     "test3",
     mass=float("inf"),
     frict=float("inf"),
 )
-item1.position = (0, 250, 100, 0)
 item3.position = (0, 100, 100, 0)"""
+item1.position = (0, 150, 50, 0)
 item0.position = (0, 220, 100, 0)
 while True:
     v = 0j
     if kbo.is_pressed("w"):
-        v = complex(v.real, -5)
+        v = complex(5, 3 * pi / 2)
     elif kbo.is_pressed("s"):
-        v = complex(v.real, 5)
+        v = complex(5, pi / 2)
     if kbo.is_pressed("a"):
-        v = complex(-5, v.imag)
+        v = complex(5, pi)
     elif kbo.is_pressed("d"):
-        v = complex(5, v.imag)
+        v = complex(5, 0)
     elif kbo.is_pressed("esc"):
         del win
         break

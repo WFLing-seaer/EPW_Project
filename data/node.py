@@ -1,18 +1,23 @@
-import math, cmath, tkinter as tk
+from __future__ import annotations
+from typing import Any
 
 
 class node:
     """定义图或树的节点。"""
 
     istree: bool
-    related: dict
+    related: dict[node, int]
+    parent: node
+
+    auto_convert = False
+    exclusive = True
 
     def __init__(
         self,
-        related: dict | list | type | None = None,
-        parent: type | None = None,
-        data=None,
-    ) -> None:
+        related: dict[node, int] | list[node] | node | None = None,
+        parent: node | None = None,
+        data: Any = None,
+    ):
         """定义图或树的节点。
         related  : {node:weight}或list[node]（等价于{n1:0,n2:0,...}或node（等价于{n:0}）
         parent   : node
@@ -49,19 +54,21 @@ class node:
             pass
         elif isinstance(related, list):
             related = dict(zip(related, [0] * len(related)))
-        else:
+        elif isinstance(related, node):
             related = {related: 0}
+        else:
+            related = {}
 
         self.data = data
 
         if dfn == 0:  # 用习惯了switch之后……（恼）
             self.istree: bool = True  # T:树节点;F:图节点
             self.parent: None = None  # type: ignore
-            self.related: dict = {}
+            self.related: dict[node, int] = {}
         elif dfn == 1:
             self.istree: bool = all([n.istree for n in related])
             self.parent: None = None  # type: ignore
-            self.related: dict = related
+            self.related: dict[node, int] = related
             if self.istree:
                 if any([n.parent for n in related]):
                     self.istree = False
@@ -73,13 +80,13 @@ class node:
                         rel.parent = self
         elif dfn == 2:
             self.istree: bool = parent.istree  # type: ignore
-            self.parent: type = parent if self.istree else None  # type: ignore
-            self.related: dict = {} if self.istree else {parent: 0}
+            self.parent: node = parent if self.istree else None  # type: ignore
+            self.related: dict[node, int] = {} if self.istree else {parent: 0} if parent else {}
             self.parent.related.update({self: 0})  # type: ignore
         elif dfn == 3:
             self.istree: bool = all([n.istree for n in related]) and parent.istree  # type: ignore
-            self.parent: type = parent if self.istree else None  # type: ignore
-            self.related: dict = related
+            self.parent: node = parent if self.istree else None  # type: ignore
+            self.related: dict[node, int] = related
             if self.parent:
                 self.parent.related.update({self: 0})  # type: ignore
             if self.istree:
@@ -92,7 +99,7 @@ class node:
                     for rel in related:
                         rel.parent = self
             else:
-                self.related.update({parent: 0})
+                self.related.update({parent: 0} if parent else {})
 
     def __iter__(self):
         if self.istree:
@@ -125,51 +132,23 @@ class node:
     def __radd__(self, val):
         return val.__add__(self)
 
-    @staticmethod
-    def show_graph(nodes):
-        win = tk.Tk("图:" + __name__)
-        canvas = tk.Canvas(win)
-        canvas.config(width=1024, height=1024)
-        canvas.pack()
-        lnodes = len(nodes)
-        dnode = {}
-        for i, n in enumerate(nodes):
-            x, y = cmath.sin(2 * math.pi * i / lnodes), cmath.cos(2 * math.pi * i / lnodes)
-            canvas.create_oval(
-                512 + x * 64 * lnodes**0.5 - 128 / lnodes,
-                512 + y * 64 * lnodes**0.5 - 128 / lnodes,
-                512 + x * 64 * lnodes**0.5 + 128 / lnodes,
-                512 + y * 64 * lnodes**0.5 + 128 / lnodes,
-            )
-            canvas.create_text(
-                512 + x * 64 * lnodes**0.5,
-                512 + y * 64 * lnodes**0.5,
-                font='"星汉等宽 CN normal" ' + str(int(128 / lnodes)),
-                text=str(n.data),
-            )
-            dnode[n] = (512 + x * 64 * lnodes**0.5, 512 + y * 64 * lnodes**0.5)
-        for n in nodes:
-            dn = dnode[n]
-            for rn, weight in n.related.items():
-                try:
-                    x00, y00, x01, y01, r = dnode[n] + dnode[rn] + (128 / lnodes,)
-                    θ = math.atan2(y01 - y00, x01 - x00)
-                    dx, dy = r * cmath.cos(θ), r * cmath.sin(θ)
-                    x10, y10, x11, y11 = x00 + dx, y00 + dy, x01 - dx, y01 - dy
-                    canvas.create_line(x10, y10, x11, y11)
-                    canvas.create_text(
-                        (dn[0] + dnode[rn][0]) / 2,
-                        (dn[1] + dnode[rn][1]) / 2,
-                        font='"星汉等宽 CN normal" 16',
-                        text=str(weight),
-                    )
-                except KeyError:
-                    pass
-        canvas.focus_set()
+    def __eq__(self, val):
+        return self.data == val.data if self.exclusive else vars(self) == vars(val)
+
+    def __hash__(self):
+        return hash(self.data) if self.exclusive else hash(vars(self))
 
     def tograph(self):
-        if self.istree:
+        if self.istree and self.auto_convert:
             self.istree = False
             if self.parent:
                 self.related.update({self.parent: 0})
             [n.tograph() for n in self.related]
+
+    def parents(self):
+        # 此节点的所有父节点以及祖节点。
+        if not self.parent:
+            return []
+        result = [self.parent]
+        result += self.parent.parents()
+        return result
